@@ -28,6 +28,10 @@ final class WooAdapter
 
     public function ids(string $kind, int $offset, int $limit): array
     {
+        if ($kind === 'customer') {
+            $ids=get_users(['role'=>'customer','fields'=>'ID','number'=>$limit,'offset'=>$offset,'orderby'=>'ID','order'=>'ASC']);
+            return array_map(function($id){return $this->engine->contactId(Protocol::key('woo','customer',(int)$id));},$ids);
+        }
         if ($kind === 'order') {
             return wc_get_orders(['return' => 'ids', 'limit' => $limit, 'offset' => $offset, 'orderby' => 'ID', 'order' => 'ASC', 'type' => 'shop_order']);
         }
@@ -258,6 +262,51 @@ final class WooAdapter
         $p->save();
     }
 
+    public function contactProfile(string $kind, int $id): array
+    {
+        $blank=['first_name'=>'','last_name'=>'','email'=>'','phone'=>'','company'=>'','billing'=>[],'shipping'=>[],'guest'=>$kind==='guest','deleted'=>false];
+        if ($kind==='guest') {
+            $o=wc_get_order($id);
+            if (!$o || $o->get_meta('_wd29_bridge_origin')) { $blank['deleted']=true; return $blank; }
+            $billing=$o->get_address('billing'); $shipping=$o->get_address('shipping');
+        } else {
+            $u=get_userdata($id);
+            if (!$u || !in_array('customer',$u->roles,true)) { $blank['deleted']=true; return $blank; }
+            $c=new \WC_Customer($id); $billing=$c->get_billing(); $shipping=$c->get_shipping();
+            $billing['email']=$c->get_email();
+            $billing['first_name']=$billing['first_name']?:$c->get_first_name();
+            $billing['last_name']=$billing['last_name']?:$c->get_last_name();
+        }
+        foreach (['first_name','last_name','email','phone','company'] as $field) { $blank[$field]=(string)($billing[$field]??''); }
+        $blank['billing']=$billing; $blank['shipping']=$shipping; return $blank;
+    }
+
+    public function orderContact(int $id): ?string
+    {
+        $o=wc_get_order($id); if (!$o || $o->get_meta('_wd29_bridge_origin')) { return null; }
+        $u=$o->get_customer_id()?get_userdata($o->get_customer_id()):false;
+        return $u && in_array('customer',$u->roles,true) ? Protocol::key('woo','customer',$u->ID) : Protocol::key('woo','guest',$id);
+    }
+
+    public function reconcileOrderLinks(int $id): void
+    {
+        $o=wc_get_order($id); if (!$o || !$o->get_meta('_wd29_bridge_origin')) { return; }
+        $snapshot=$o->get_meta('_wd29_bridge_snapshot'); $index=0;
+        foreach ($o->get_items() as $item) {
+            $key=$item->get_meta('_wd29_source_product')?:($snapshot['items'][$index]['product']??null); $index++;
+            if ($item->get_product_id() || !$key) { continue; }
+            $map=$this->engine->mapping($key); $p=$map?wc_get_product((int)$map['local_id']):false;
+            if ($p) { $name=$item->get_name(); $item->set_product($p); $item->set_name($name); $item->save(); }
+        }
+    }
+
+    public function orderSummary(int $id): array
+    {
+        $o=wc_get_order($id); $missing=0;
+        foreach ($o->get_items() as $item) { if (!$item->get_product_id()) { $missing++; } }
+        return ['local_id'=>$id,'total'=>$o->get_total(),'currency'=>$o->get_currency(),'status'=>$o->get_status(),'lines'=>count($o->get_items()),'unlinked_lines'=>$missing];
+    }
+
     public function order(int $id): array
     {
         $o = wc_get_order($id);
@@ -318,10 +367,9 @@ final class WooAdapter
             $item = new \WC_Order_Item_Product();
             if (!empty($row['product'])) {
                 $productMap = $this->engine->mapping($row['product']);
-                if (!$productMap) { throw new \RuntimeException('Order product must be synchronized first.'); }
-                $p = wc_get_product((int) $productMap['local_id']);
-                if (!$p) { throw new \RuntimeException('Order product is unavailable.'); }
-                $item->set_product($p);
+                $p = $productMap ? wc_get_product((int)$productMap['local_id']) : false;
+                if ($p) { $item->set_product($p); }
+                $item->add_meta_data('_wd29_source_product', $row['product'], true);
             }
             $item->set_name($row['name']); $item->set_quantity((int) $row['quantity']);
             $item->set_subtotal($row['net']); $item->set_total($row['net']);

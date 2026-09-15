@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.1.3
+ * Version: 0.1.4
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -32,6 +32,9 @@ register_activation_hook(__FILE__, function () {
 });
 register_deactivation_hook(__FILE__, function () { wp_clear_scheduled_hook('wd29_bridge_tick'); });
 add_filter('cron_schedules', function ($schedules) { $schedules['wd29_minute'] = ['interval' => 60, 'display' => 'Every minute (WD29 bridge)']; return $schedules; });
+add_action('plugins_loaded', function () {
+    if (get_option('wd29_bridge_schema') !== '4') { wd29_bridge()->install(); update_option('wd29_bridge_schema','4',false); }
+}, 30);
 add_action('wd29_bridge_tick', function () { if (function_exists('wc_get_product')) { wd29_bridge()->tick(); } });
 function wd29_bridge_capture_later(string $kind, int $id): void {
     static $pending = [], $registered = false;
@@ -100,8 +103,8 @@ function wd29_bridge_admin(): void {
             elseif ($action === 'tick') { $engine->tick(); $message = 'Queue processed; inspect the result below.'; }
             elseif ($action === 'retry') { $engine->retry(); $message = 'Failed events queued again.'; }
             elseif ($action === 'resolve_catalog') { $engine->retryCatalogConflicts(); $message = 'Catalog conflicts queued with the selected priority.'; }
-            elseif (in_array($action, ['seed_products','seed_orders'], true)) {
-                $kind = $action === 'seed_orders' ? 'order' : 'product';
+            elseif (in_array($action, ['seed_products','seed_orders','seed_customers'], true)) {
+                $kind = $action === 'seed_customers' ? 'customer' : ($action === 'seed_orders' ? 'order' : 'product');
                 $offset = max(0, (int) ($_POST['offset'] ?? 0));
                 $count = $engine->seed($kind, $offset);
                 $peer = $engine->peer(['op' => 'seed', 'kind' => $kind, 'offset' => $offset]);
@@ -126,7 +129,7 @@ function wd29_bridge_admin(): void {
     echo '<button class="button button-primary" name="bridge_action" value="save">Save settings</button></form><hr><form method="post">';
     wp_nonce_field('wd29_bridge_admin');
     echo '<p><label>Batch offset <input type="number" min="0" name="offset" value="0"></label> Batches contain up to 10 records per store.</p>';
-    foreach (['health' => 'Test connection', 'seed_products' => 'Capture both catalogs', 'seed_orders' => 'Capture both order histories', 'tick' => 'Process queue', 'retry' => 'Retry failures', 'resolve_catalog'=>'Retry catalog conflicts with selected priority'] as $value => $label) {
+    foreach (['health' => 'Test connection', 'seed_products' => 'Capture both catalogs', 'seed_orders' => 'Capture both order histories', 'seed_customers' => 'Capture customer contacts', 'tick' => 'Process queue', 'retry' => 'Retry failures', 'resolve_catalog'=>'Retry catalog conflicts with selected priority'] as $value => $label) {
         echo '<button class="button" name="bridge_action" value="' . esc_attr($value) . '">' . esc_html($label) . '</button> ';
     }
     echo '</form><p>' . esc_html(get_option('wd29_bridge_notice', '')) . '</p><h2>Latest events</h2><table class="widefat"><thead><tr>';
@@ -137,5 +140,13 @@ function wd29_bridge_admin(): void {
     foreach (['source','local_id','name','brands','tags','type','regular','sale','tax','basis','initial_stock_snapshot'] as $heading) { echo '<th>' . esc_html($heading) . '</th>'; }
     echo '</tr></thead><tbody>';
     foreach ($engine->catalogAudit() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>' . esc_html((string)$cell) . '</td>'; } echo '</tr>'; }
+    echo '</tbody></table><h2>Order reconciliation</h2><p>Unlinked historical lines retain their source details; catalog links are repaired once products are available.</p><table class="widefat"><thead><tr>';
+    foreach (['source','local_id','total','currency','status','lines','unlinked_lines'] as $heading) { echo '<th>'.esc_html($heading).'</th>'; }
+    echo '</tr></thead><tbody>';
+    foreach ($engine->orderReport() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>'.esc_html((string)$cell).'</td>'; } echo '</tr>'; }
+    echo '</tbody></table><h2>Customer contact directory</h2><p>Read-only copies of contact details, edited on their source store. No login accounts, passwords or marketing consents are copied. Emails never merge identities automatically. Up to 200 contacts.</p><table class="widefat"><thead><tr>';
+    foreach (['source','name','email','phone','company','billing','type'] as $heading) { echo '<th>'.esc_html($heading).'</th>'; }
+    echo '</tr></thead><tbody>';
+    foreach ($engine->customerReport() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>'.esc_html((string)$cell).'</td>'; } echo '</tr>'; }
     echo '</tbody></table></div>';
 }
