@@ -6,7 +6,7 @@ slug = 'woocommerce-prestashop-bridge'
 files = [root / name for name in ['woocommerce-prestashop-bridge.php', 'README.md', 'LICENSE']]
 for directory in ['includes']:
     files.extend(sorted((root / directory).rglob('*.php')))
-output = root / 'dist' / (slug + '-0.1.2.zip')
+output = root / 'dist' / (slug + '-0.1.3.zip')
 output.parent.mkdir(exist_ok=True)
 with ZipFile(output, 'w', ZIP_DEFLATED) as archive:
     for file in files:

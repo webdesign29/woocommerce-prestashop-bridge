@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.1.2
+ * Version: 0.1.3
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -134,7 +134,7 @@ function wd29_bridge_admin(): void {
     echo '</tr></thead><tbody>';
     foreach ($engine->report() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>' . esc_html((string) $cell) . '</td>'; } echo '</tr>'; }
     echo '</tbody></table><h2>Catalog audit</h2><p>Latest transmitted snapshots; unknown stock is not zero. Up to 200 products.</p><table class="widefat"><thead><tr>';
-    foreach (['source','local_id','name','type','regular','sale','tax','basis','initial_stock_snapshot'] as $heading) { echo '<th>' . esc_html($heading) . '</th>'; }
+    foreach (['source','local_id','name','brands','tags','type','regular','sale','tax','basis','initial_stock_snapshot'] as $heading) { echo '<th>' . esc_html($heading) . '</th>'; }
     echo '</tr></thead><tbody>';
     foreach ($engine->catalogAudit() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>' . esc_html((string)$cell) . '</td>'; } echo '</tr>'; }
     echo '</tbody></table></div>';

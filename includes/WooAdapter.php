@@ -102,6 +102,10 @@ final class WooAdapter
                 'status' => $v->get_status() === 'publish' ? 'publish' : 'draft'];
             $data['inventory'][] = $this->inventory($v, $vkey);
         }
+        $data['brands'] = taxonomy_exists('product_brand') ? wc_get_product_terms($p->get_id(), 'product_brand', ['fields'=>'names']) : [];
+        $data['tags'] = wc_get_product_terms($p->get_id(), 'product_tag', ['fields'=>'names']);
+        $data['brands'] = array_map('html_entity_decode', $data['brands']); $data['tags'] = array_map('html_entity_decode', $data['tags']);
+        sort($data['brands']); sort($data['tags']);
         return $data;
     }
 
@@ -183,6 +187,12 @@ final class WooAdapter
         }
         $p->set_attributes($attributes);
         $p->save();
+        foreach (['brands'=>'product_brand','tags'=>'product_tag'] as $field=>$taxonomy) {
+            if (!isset($data[$field])) { continue; }
+            if (!taxonomy_exists($taxonomy)) { if ($data[$field]) { throw new \RuntimeException('Required product taxonomy is unavailable.'); } continue; }
+            $terms = wp_set_object_terms($p->get_id(), array_values($data[$field]), $taxonomy, false);
+            if (is_wp_error($terms)) { throw new \RuntimeException('Product taxonomy mapping failed.'); }
+        }
         $this->engine->bind($data['key'], 'product', $p->get_id());
         if (!$map) { $this->initializeStock($p, $data['key'], $data['inventory']); }
         foreach ($data['variants'] as $row) {
@@ -302,7 +312,7 @@ final class WooAdapter
         if (!$map && !empty($data['created'])) { $o->set_date_created($data['created']); }
         $o->save();
         // Rebuild only mirrored lines; native source order lines are never overwritten.
-        foreach ($o->get_items(['line_item', 'shipping', 'tax']) as $item) { $o->remove_item($item->get_id()); }
+        foreach ($o->get_items(['line_item', 'shipping', 'tax', 'fee']) as $item) { $o->remove_item($item->get_id()); }
         $sum = (float) $data['shipping_net'] + (float) $data['shipping_tax'];
         foreach ($data['items'] as $row) {
             $item = new \WC_Order_Item_Product();
@@ -320,7 +330,18 @@ final class WooAdapter
             $sum += (float) $row['net'] + (float) $row['tax'];
         }
         if (abs($sum - (float) $data['total']) > 0.02) {
-            throw new \RuntimeException('Order total differs from lines plus shipping; fees/discount mapping needs review.');
+            $lineNet = (float)$data['shipping_net']; $lineTax = (float)$data['shipping_tax'];
+            foreach ($data['items'] as $row) { $lineNet += (float)$row['net']; $lineTax += (float)$row['tax']; }
+            $discountNet = $lineNet - ((float)$data['total'] - (float)$data['tax']);
+            $discountTax = $lineTax - (float)$data['tax'];
+            // Only a declared source discount can explain this difference; never invent balancing amounts.
+            if ($discountNet <= 0 || $discountTax < -0.02 || abs($discountNet - (float)$data['discount']) > 0.02) {
+                throw new \RuntimeException('Order total differs from lines plus shipping; fees/discount mapping needs review.');
+            }
+            $fee = new \WC_Order_Item_Fee(); $fee->set_name('Source order discount');
+            $fee->set_amount(-$discountNet); $fee->set_total(-$discountNet);
+            $fee->set_tax_status($discountTax > 0 ? 'taxable' : 'none'); $fee->set_taxes(['total'=>[0=>-$discountTax]]);
+            $o->add_item($fee);
         }
         $shipping = new \WC_Order_Item_Shipping();
         $shipping->set_method_title('Source shipping'); $shipping->set_total($data['shipping_net']);

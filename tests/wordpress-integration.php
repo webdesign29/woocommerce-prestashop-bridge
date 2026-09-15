@@ -31,6 +31,7 @@ wc_update_product_stock($p,2,'decrease'); $e->capture('product',$p->get_id());
 $rows = $e->sql("SELECT payload FROM {b}queue WHERE direction='out' AND kind='stock'");
 expect(count($rows) === 1 && json_decode($rows[0]['payload'],true)['delta'] === -2,'Source sale did not produce exactly one delta');
 $foreign = $data; $foreign['key'] = 'ps:product:900'; $foreign['inventory'][0]['key'] = $foreign['key'];
+$foreign['brands']=['Fixture Brand']; $foreign['tags']=['Summer','Outlet'];
 $foreign['name'] = 'Fixture remote'; $hash = Engine::catalogHash($foreign);
 $send(str_repeat('a',32),'product',$foreign['key'],['base'=>'','hash'=>$hash,'data'=>$foreign]);
 $mapped = $e->mapping($foreign['key']);
@@ -82,6 +83,14 @@ $request->set_header('x-wd29-signature',str_repeat('0',64));
 expect(rest_do_request($request)->get_status()===401,'Invalid REST signature was accepted');
 if (getenv('WD29_FIXTURE_OUTPUT')) { file_put_contents(getenv('WD29_FIXTURE_OUTPUT'),Protocol::encode($e->adapter->product($p->get_id()))); }
 echo "PASS: native WooCommerce product, variation, initial stock, local delta, replay, concurrent delta, unknown quantity, conflict, order mirror and cancellation\n";
+$roundtrip=$e->adapter->product((int)$mapped['local_id']);
+expect($roundtrip['brands']===['Fixture Brand'] && $roundtrip['tags']===['Outlet','Summer'],'Native brand/tag roundtrip failed');
+$discounted=$order; $discounted['key']='ps:order:101'; $discounted['total']='10.00'; $discounted['discount']='2.50';
+$send(str_repeat('2',32),'order',$discounted['key'],['base'=>'','hash'=>Protocol::fingerprint($discounted),'data'=>$discounted]);
+$dm=$e->mapping($discounted['key']); expect($dm!==null,'Declared source discount import failed');
+$do=wc_get_order($dm['local_id']); expect(count($do->get_items('fee'))===1 && (float)$do->get_total()===10.0,'Source discount not recorded on mirror');
+expect((int)wc_get_product($mapped['local_id'])->get_stock_quantity()===$before,'Discounted mirror changed stock');
+echo "PASS: native brands, tags and declared global order discount\n";
 update_option('wd29_bridge_config', ['mode'=>'disabled']);
 
 $audited = $e->catalogAudit();
