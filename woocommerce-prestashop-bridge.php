@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.1.8
+ * Version: 0.1.9
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -111,7 +111,7 @@ function wd29_bridge_admin(): void {
                 }
                 update_option('wd29_bridge_status_mapping',$mapping,false);
                 $message='Status mappings saved; existing mirrors updated: '.$engine->adapter->applyStatusMappings();
-            } elseif ($action === 'health') { $message = wp_json_encode($engine->peer(['op' => 'health'])); }
+            } elseif ($action === 'normalize_stock') { $message=wp_json_encode($engine->adapter->normalizeUnknownVariantStock(max(0,(int)($_POST['offset']??0)))); } elseif ($action === 'health') { $message = wp_json_encode($engine->peer(['op' => 'health'])); }
             elseif ($action === 'tick') { $engine->tick(); $message = 'Queue processed; inspect the result below.'; }
             elseif ($action === 'retry') { $engine->retry(); $message = 'Failed events queued again.'; }
             elseif ($action === 'resolve_catalog') { $engine->retryCatalogConflicts(); $message = 'Catalog conflicts queued with the selected priority.'; }
@@ -141,7 +141,7 @@ function wd29_bridge_admin(): void {
     echo '<button class="button button-primary" name="bridge_action" value="save">Save settings</button></form><hr><form method="post">';
     wp_nonce_field('wd29_bridge_admin');
     echo '<p><label>Batch offset <input type="number" min="0" name="offset" value="0"></label> Batches contain up to 10 records per store.</p>';
-    foreach (['health' => 'Test connection', 'seed_products' => 'Capture both catalogs', 'seed_orders' => 'Capture both order histories', 'seed_customers' => 'Capture customer contacts', 'tick' => 'Process queue', 'retry' => 'Retry failures', 'resolve_catalog'=>'Retry catalog conflicts with selected priority'] as $value => $label) {
+    foreach (['health' => 'Test connection', 'seed_products' => 'Capture both catalogs', 'seed_orders' => 'Capture both order histories', 'seed_customers' => 'Capture customer contacts', 'tick' => 'Process queue', 'retry' => 'Retry failures', 'resolve_catalog'=>'Retry catalog conflicts with selected priority', 'normalize_stock'=>'Set unknown Woo variation quantities to zero'] as $value => $label) {
         echo '<button class="button" name="bridge_action" value="' . esc_attr($value) . '">' . esc_html($label) . '</button> ';
     }
     echo '</form><h2>PrestaShop order status mappings</h2><p>Unknown source statuses are created automatically with their original label. Choose an existing WooCommerce status if needed. This changes mirror presentation only; the original PrestaShop status stays unchanged.</p><form method="post">';

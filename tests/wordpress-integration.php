@@ -188,3 +188,15 @@ $e->adapter->applyProduct($archivedWire,$e->mapping($archivedWire['key']));
 expect(wc_get_product($trashed->get_id())->get_status()==='trash','Mirror restored original trash product');
 echo "PASS: archived order product included without restoring trash; SEO and supplier purchasing fields\n";
 update_option('wd29_bridge_config',['mode'=>'disabled']);
+
+update_option('wd29_bridge_config',['mode'=>'live','peer'=>'https://ps.example.test/module/wd29woobridge/webhook','secret'=>str_repeat('fixture-',8)],false);
+$np=new WC_Product_Variable(); $np->set_name('Normalize stock fixture'); $np->set_status('publish'); $np->save();
+$nv=new WC_Product_Variation(); $nv->set_parent_id($np->get_id()); $nv->set_status('publish'); $nv->set_regular_price('20'); $nv->set_manage_stock(false); $nv->save();
+$nk=new WC_Product_Variation(); $nk->set_parent_id($np->get_id()); $nk->set_status('publish'); $nk->set_regular_price('20'); $nk->set_manage_stock(true); $nk->set_stock_quantity(4); $nk->save();
+WC_Product_Variable::sync($np->get_id());
+$allIds=$e->adapter->ids('product',0,10000); $position=array_search($np->get_id(),$allIds,true); expect($position!==false,'Normalization fixture absent');
+$e->adapter->normalizeUnknownVariantStock((int)(floor($position/10)*10));
+expect(wc_get_product($nv->get_id())->get_manage_stock('edit')===true && (int)wc_get_product($nv->get_id())->get_stock_quantity()===0,'Unknown stock not normalized');
+expect((int)wc_get_product($nk->get_id())->get_stock_quantity()===4,'Known quantity changed');
+echo "PASS: explicit stock normalization preserves known quantities\n";
+update_option('wd29_bridge_config',['mode'=>'disabled']);

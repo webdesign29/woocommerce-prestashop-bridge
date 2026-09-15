@@ -299,6 +299,22 @@ final class WooAdapter
             update_post_meta($id,'_wd29_bridge_source',hash('sha256',$url)); return (int)$id;
         } finally { if ($tmp && is_file($tmp)) { unlink($tmp); } }
     }
+    public function normalizeUnknownVariantStock(int $offset): array
+    {
+        $changed=0; $products=$this->ids('product',$offset,10);
+        foreach ($products as $id) {
+            $p=wc_get_product($id);
+            if (!$p || !$p->is_type('variable') || strpos($this->engine->identity('product',$id),'woo:')!==0) { continue; }
+            if ($p->get_manage_stock('edit')===true) { throw new \RuntimeException('Parent-managed inventory needs an allocation decision.'); }
+            foreach ($p->get_children() as $vid) {
+                $v=wc_get_product($vid); if (!$v || $v->get_manage_stock('edit')===true) { continue; }
+                $v->set_manage_stock(true); $v->set_stock_quantity(0); $v->set_backorders('no'); $v->set_stock_status('outofstock'); $v->save(); $changed++;
+            }
+            \WC_Product_Variable::sync($id); $this->engine->capture('product',$id);
+        }
+        return ['products'=>count($products),'changed_variations'=>$changed,'next_offset'=>$offset+10];
+    }
+
     public function stockDelta(array $map, int $delta): void
     {
         $p = wc_get_product((int) $map['local_id']);
