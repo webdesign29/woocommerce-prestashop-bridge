@@ -172,3 +172,19 @@ expect(wc_get_product($e->mapping('ps:variant:903')['local_id'])->get_image_id('
 $roundImages=$e->adapter->product((int)$imageProductMap['local_id']); expect(count($roundImages['variants'][0]['images'])===1,'Variation-specific image export failed');
 echo "PASS: WooCommerce variation image association and export using cached media fixture\n";
 update_option('wd29_bridge_config',['mode'=>'disabled']);
+
+update_option('wd29_bridge_config',['mode'=>'live','peer'=>'https://ps.example.test/module/wd29woobridge/webhook','secret'=>str_repeat('fixture-',8)],false);
+$commercial=$foreign; $commercial['key']='ps:product:8890'; $commercial['inventory'][0]['key']=$commercial['key'];
+$commercial['purchase_price_net']='9.25'; $commercial['supplier']=['name'=>'Fixture Supplier','reference'=>'SUP-42']; $commercial['seo']=['title'=>'Fixture SEO title','description'=>'Fixture SEO description']; $commercial['archived']=true;
+$send(str_repeat('c1',16),'product',$commercial['key'],['base'=>'','hash'=>Engine::catalogHash($commercial),'data'=>$commercial]);
+$cm=$e->mapping($commercial['key']); expect($cm!==null,'Commercial Woo import failed');
+$cp=wc_get_product((int)$cm['local_id']); expect($cp->get_status()==='draft','Archive became published');
+$cr=$e->adapter->product((int)$cp->get_id()); expect($cr['seo']['title']==='Fixture SEO title' && (float)$cr['purchase_price_net']===9.25 && $cr['supplier']['reference']==='SUP-42','SEO or purchasing fields lost');
+$trashed=new WC_Product_Simple(); $trashed->set_name('Archived order fixture'); $trashed->set_regular_price('0.5'); $trashed->set_status('publish'); $trashed->save();
+$historicOrder=new WC_Order(); $historicOrder->add_product($trashed,1); $historicOrder->save(); wp_trash_post($trashed->get_id());
+expect(in_array($trashed->get_id(),$e->adapter->ids('product',0,10000),true),'Referenced trashed product omitted');
+$archivedWire=$e->adapter->product($trashed->get_id()); expect($archivedWire['archived']===true,'Trash marker omitted');
+$e->adapter->applyProduct($archivedWire,$e->mapping($archivedWire['key']));
+expect(wc_get_product($trashed->get_id())->get_status()==='trash','Mirror restored original trash product');
+echo "PASS: archived order product included without restoring trash; SEO and supplier purchasing fields\n";
+update_option('wd29_bridge_config',['mode'=>'disabled']);

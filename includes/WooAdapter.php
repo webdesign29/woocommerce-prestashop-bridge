@@ -40,7 +40,8 @@ final class WooAdapter
         if ($kind === 'order') {
             return wc_get_orders(['return' => 'ids', 'limit' => $limit, 'offset' => $offset, 'orderby' => 'ID', 'order' => 'ASC', 'type' => 'shop_order']);
         }
-        return wc_get_products(['return' => 'ids', 'limit' => $limit, 'offset' => $offset, 'orderby' => 'ID', 'order' => 'ASC', 'status' => ['publish', 'private', 'draft', 'pending']]);
+        global $wpdb;
+        return array_map('intval',$wpdb->get_col($wpdb->prepare("SELECT p.ID FROM {$wpdb->posts} p WHERE p.post_type='product' AND (p.post_status IN ('publish','private','draft','pending') OR (p.post_status='trash' AND EXISTS (SELECT 1 FROM {$wpdb->prefix}woocommerce_order_itemmeta m WHERE m.meta_key='_product_id' AND m.meta_value=CAST(p.ID AS CHAR)))) ORDER BY p.ID LIMIT %d OFFSET %d",$limit,$offset)));
     }
 
     private function prices($product): array
@@ -75,10 +76,30 @@ final class WooAdapter
         elseif (preg_match('/^[0-9]{12}$/D',$gtin)) { $ids['upc']=$gtin; }
         $dimensions=[];
         foreach (['length','width','height'] as $field) { $value=$p->{'get_'.$field}(); $dimensions[$field]=$value===''?null:(string)wc_get_dimension((float)$value,'cm'); }
-        return ['identifiers'=>$ids,'dimensions_cm'=>$dimensions];
+        $extra=['identifiers'=>$ids,'dimensions_cm'=>$dimensions];
+        if (metadata_exists('post',$p->get_id(),'_wd29_purchase_net')) { $extra['purchase_price_net']=(string)$p->get_meta('_wd29_purchase_net'); }
+        if (metadata_exists('post',$p->get_id(),'_wd29_supplier_name')) { $extra['supplier']=['name'=>(string)$p->get_meta('_wd29_supplier_name'),'reference'=>(string)$p->get_meta('_wd29_supplier_reference')]; }
+        if (!$p->is_type('variation') && (metadata_exists('post',$p->get_id(),'_yoast_wpseo_title') || metadata_exists('post',$p->get_id(),'_yoast_wpseo_metadesc'))) {
+            $title=(string)get_post_meta($p->get_id(),'_yoast_wpseo_title',true); $description=(string)get_post_meta($p->get_id(),'_yoast_wpseo_metadesc',true);
+            if (function_exists('wpseo_replace_vars')) { $title=wpseo_replace_vars($title,get_post($p->get_id())); $description=wpseo_replace_vars($description,get_post($p->get_id())); }
+            if (strpos($title.$description,'%%')===false) { $extra['seo']=['title'=>$title,'description'=>$description]; }
+        }
+        return $extra;
     }
     private function applyExtraFields($p,array $row): void
     {
+        if (isset($row['purchase_price_net'])) {
+            if (!is_numeric($row['purchase_price_net']) || (float)$row['purchase_price_net']<0) { throw new \RuntimeException('Invalid net purchasing cost.'); }
+            $p->update_meta_data('_wd29_purchase_net',(string)$row['purchase_price_net']);
+        }
+        if (isset($row['supplier'])) { $p->update_meta_data('_wd29_supplier_name',sanitize_text_field($row['supplier']['name']??'')); $p->update_meta_data('_wd29_supplier_reference',sanitize_text_field($row['supplier']['reference']??'')); }
+        if (isset($row['seo']) && !$p->is_type('variation')) {
+            foreach (['title'=>'_yoast_wpseo_title','description'=>'_yoast_wpseo_metadesc'] as $field=>$meta) {
+                // Preserve local dynamic templates on their originating store.
+                if (strpos((string)$p->get_meta($meta),'%%')!==false && strpos($row['key']??'','woo:')===0) { continue; }
+                $p->update_meta_data($meta,sanitize_text_field($row['seo'][$field]??''));
+            }
+        }
         if (isset($row['identifiers'])) {
             $ids=array_intersect_key($row['identifiers'],array_flip(['gtin','ean13','upc','isbn','mpn']));
             foreach ($ids as $v) { if (!is_string($v)||strlen($v)>64) { throw new \RuntimeException('Invalid product identifier.'); } }
@@ -106,7 +127,7 @@ final class WooAdapter
         $key = $this->engine->identity('product', $p->get_id());
         $data = ['key' => $key, 'type' => $p->get_type(), 'name' => $p->get_name(), 'sku' => $p->get_sku(),
             'description' => $p->get_description(), 'short_description' => $p->get_short_description(),
-            'status' => $p->get_status() === 'publish' ? 'publish' : 'draft', 'virtual' => $p->is_virtual(),
+            'status' => $p->get_status() === 'publish' ? 'publish' : 'draft', 'archived'=>$p->get_status()==='trash', 'virtual' => $p->is_virtual(),
             'currency' => get_woocommerce_currency(), 'prices' => $this->prices($p),
             'weight_kg' => (string) wc_get_weight((float) $p->get_weight(), 'kg'),
             'categories' => [], 'images' => [], 'attributes' => [], 'variants' => [], 'inventory' => [$this->inventory($p, $key)]];
@@ -203,7 +224,7 @@ final class WooAdapter
         $p->set_sku($data['sku']);
         $p->set_description(wp_kses_post($data['description']));
         $p->set_short_description(wp_kses_post($data['short_description']));
-        $p->set_status($data['status'] === 'publish' ? 'publish' : 'draft');
+        if (!($p->get_status()==='trash' && strpos($data['key'],'woo:')===0)) { $p->set_status(!empty($data['archived'])?'draft':($data['status'] === 'publish' ? 'publish' : 'draft')); }
         $p->set_virtual((bool) $data['virtual']);
         $p->set_weight(wc_get_weight((float) $data['weight_kg'], get_option('woocommerce_weight_unit', 'kg'), 'kg'));
         $this->applyPrices($p, $data['prices']);

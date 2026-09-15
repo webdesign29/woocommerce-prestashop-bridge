@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.1.7
+ * Version: 0.1.8
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -160,7 +160,7 @@ function wd29_bridge_admin(): void {
     echo '</tr></thead><tbody>';
     foreach ($engine->report() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>' . esc_html((string) $cell) . '</td>'; } echo '</tr>'; }
     echo '</tbody></table><h2>Catalog audit</h2><p>Latest transmitted snapshots; unknown stock is not zero. Up to 200 products.</p><table class="widefat"><thead><tr>';
-    foreach (['source','local_id','name','brands','tags','type','regular','sale','tax','basis','initial_stock_snapshot','identifiers','dimensions_cm','features','variant_images'] as $heading) { echo '<th>' . esc_html($heading) . '</th>'; }
+    foreach (['source','local_id','name','brands','tags','type','regular','sale','tax','basis','initial_stock_snapshot','identifiers','dimensions_cm','features','variant_images','archived','purchase_price_net','supplier','seo'] as $heading) { echo '<th>' . esc_html($heading) . '</th>'; }
     echo '</tr></thead><tbody>';
     foreach ($engine->catalogAudit() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>' . esc_html((string)$cell) . '</td>'; } echo '</tr>'; }
     echo '</tbody></table><h2>Order reconciliation</h2><p>Unlinked historical lines retain their source details; catalog links are repaired once products are available.</p><table class="widefat"><thead><tr>';
@@ -173,3 +173,20 @@ function wd29_bridge_admin(): void {
     foreach ($engine->customerReport() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>'.esc_html((string)$cell).'</td>'; } echo '</tr>'; }
     echo '</tbody></table></div>';
 }
+
+add_action('woocommerce_product_options_general_product_data',function(){
+    echo '<div class="options_group">';
+    woocommerce_wp_text_input(['id'=>'_wd29_purchase_net','label'=>'Prix d’achat HT','description'=>'Coût unitaire hors taxes synchronisé avec PrestaShop. Laisser vide si inconnu.','desc_tip'=>true,'type'=>'number','custom_attributes'=>['step'=>'0.000001','min'=>'0']]);
+    woocommerce_wp_text_input(['id'=>'_wd29_supplier_name','label'=>'Fournisseur principal']);
+    woocommerce_wp_text_input(['id'=>'_wd29_supplier_reference','label'=>'Référence fournisseur']);
+    echo '</div>';
+});
+add_action('woocommerce_admin_process_product_object',function($product){
+    foreach (['_wd29_purchase_net','_wd29_supplier_name','_wd29_supplier_reference'] as $field) {
+        if (!isset($_POST[$field])) { continue; }
+        $value=sanitize_text_field(wp_unslash($_POST[$field]));
+        if ($field==='_wd29_purchase_net' && $value==='') { $product->delete_meta_data($field); continue; }
+        if ($field==='_wd29_purchase_net' && (!is_numeric($value)||(float)$value<0)) { continue; }
+        $product->update_meta_data($field,$value);
+    }
+});
