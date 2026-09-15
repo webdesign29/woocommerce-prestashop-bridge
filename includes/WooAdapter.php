@@ -66,6 +66,35 @@ final class WooAdapter
             'status' => $product->get_stock_status(), 'backorders' => $product->get_backorders() !== 'no'];
     }
 
+    private function extraFields($p): array
+    {
+        $ids=(array)$p->get_meta('_wd29_identifiers');
+        $gtin=method_exists($p,'get_global_unique_id')?$p->get_global_unique_id():($ids['gtin']??'');
+        $ids['gtin']=$gtin;
+        if (preg_match('/^[0-9]{13}$/D',$gtin) || preg_match('/^[0-9]{8}$/D',$gtin)) { $ids['ean13']=$gtin; }
+        elseif (preg_match('/^[0-9]{12}$/D',$gtin)) { $ids['upc']=$gtin; }
+        $dimensions=[];
+        foreach (['length','width','height'] as $field) { $value=$p->{'get_'.$field}(); $dimensions[$field]=$value===''?null:(string)wc_get_dimension((float)$value,'cm'); }
+        return ['identifiers'=>$ids,'dimensions_cm'=>$dimensions];
+    }
+    private function applyExtraFields($p,array $row): void
+    {
+        if (isset($row['identifiers'])) {
+            $ids=array_intersect_key($row['identifiers'],array_flip(['gtin','ean13','upc','isbn','mpn']));
+            foreach ($ids as $v) { if (!is_string($v)||strlen($v)>64) { throw new \RuntimeException('Invalid product identifier.'); } }
+            $p->update_meta_data('_wd29_identifiers',$ids);
+            $gtin=($ids['gtin']??'')?: (($ids['ean13']??'')?:($ids['upc']??''));
+            if (method_exists($p,'set_global_unique_id')) { $p->set_global_unique_id($gtin); }
+        }
+        if (isset($row['dimensions_cm'])) {
+            foreach (['length','width','height'] as $field) {
+                if (!array_key_exists($field,$row['dimensions_cm'])) { continue; }
+                $value=$row['dimensions_cm'][$field];
+                if ($value!==null && (!is_numeric($value)||(float)$value<0)) { throw new \RuntimeException('Invalid product dimension.'); }
+                $p->{'set_'.$field}($value===null?'':wc_get_dimension((float)$value,get_option('woocommerce_dimension_unit','cm'),'cm'));
+            }
+        }
+    }
     public function product(int $id): array
     {
         $p = wc_get_product($id);
@@ -81,6 +110,7 @@ final class WooAdapter
             'currency' => get_woocommerce_currency(), 'prices' => $this->prices($p),
             'weight_kg' => (string) wc_get_weight((float) $p->get_weight(), 'kg'),
             'categories' => [], 'images' => [], 'attributes' => [], 'variants' => [], 'inventory' => [$this->inventory($p, $key)]];
+        $data += $this->extraFields($p);
         foreach ($p->get_category_ids() as $termId) {
             $path = [];
             $ids = array_reverse(get_ancestors($termId, 'product_cat'));
@@ -108,7 +138,9 @@ final class WooAdapter
             }
             $data['variants'][] = ['key' => $vkey, 'sku' => $v->get_sku(), 'attributes' => $attributes,
                 'prices' => $this->prices($v), 'weight_kg' => (string) wc_get_weight((float) $v->get_weight(), 'kg'),
-                'status' => $v->get_status() === 'publish' ? 'publish' : 'draft'];
+                'status' => $v->get_status() === 'publish' ? 'publish' : 'draft'] + $this->extraFields($v);
+            $variantImages=array_values(array_unique(array_filter(array_merge([$v->get_image_id('edit')],(array)$v->get_meta('_wd29_variant_image_ids')))));
+            $data['variants'][count($data['variants'])-1]['images']=array_values(array_filter(array_map('wp_get_attachment_url',$variantImages)));
             $data['inventory'][] = $this->inventory($v, $vkey);
         }
         $data['brands'] = taxonomy_exists('product_brand') ? wc_get_product_terms($p->get_id(), 'product_brand', ['fields'=>'names']) : [];
@@ -175,6 +207,7 @@ final class WooAdapter
         $p->set_virtual((bool) $data['virtual']);
         $p->set_weight(wc_get_weight((float) $data['weight_kg'], get_option('woocommerce_weight_unit', 'kg'), 'kg'));
         $this->applyPrices($p, $data['prices']);
+        $this->applyExtraFields($p,$data);
         $categories = [];
         foreach ($data['categories'] as $path) {
             $parent = 0;
@@ -212,36 +245,39 @@ final class WooAdapter
             $v->set_status($row['status'] === 'publish' ? 'publish' : 'private');
             $v->set_attributes(array_combine(array_map('sanitize_title', array_keys($row['attributes'])), array_values($row['attributes'])));
             $this->applyPrices($v, $row['prices']);
+            $this->applyExtraFields($v,$row);
             $v->set_weight(wc_get_weight((float) $row['weight_kg'], get_option('woocommerce_weight_unit', 'kg'), 'kg'));
             $v->save();
             $this->engine->bind($row['key'], 'variant', $v->get_id());
             if (!$vm) { $this->initializeStock($v, $row['key'], $data['inventory']); }
         }
         if ($p->is_type('variable')) { \WC_Product_Variable::sync($p->get_id()); }
-        $images = [];
-        require_once ABSPATH . 'wp-admin/includes/file.php';
-        require_once ABSPATH . 'wp-admin/includes/media.php';
-        require_once ABSPATH . 'wp-admin/includes/image.php';
-        foreach ($data['images'] as $url) {
-            $existing = get_posts(['post_type' => 'attachment', 'post_status' => 'inherit', 'numberposts' => 1,
-                'meta_key' => '_wd29_bridge_source', 'meta_value' => hash('sha256', $url), 'fields' => 'ids']);
-            if ($existing) { $images[] = (int) $existing[0]; continue; }
-            $bytes = Protocol::imageBytes($url, $this->config()['peer']);
-            $info = getimagesizefromstring($bytes);
-            $extension = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'][$info['mime']];
-            $tmp = wp_tempnam('wd29-image');
-            try {
-                if (file_put_contents($tmp, $bytes) === false) { throw new \RuntimeException('Image staging failed.'); }
-                $imageId = media_handle_sideload(['name' => hash('sha256', $url) . '.' . $extension, 'tmp_name' => $tmp], $p->get_id());
-                if (is_wp_error($imageId)) { throw new \RuntimeException('Image import failed.'); }
-                update_post_meta($imageId, '_wd29_bridge_source', hash('sha256', $url));
-                $images[] = (int) $imageId;
-            } finally { if (is_file($tmp)) { unlink($tmp); } }
+        $images=[];
+        foreach ($data['images'] as $url) { $images[]=$this->importImage($url,$p->get_id()); }
+        if ($images) { $p->set_image_id($images[0]); $p->set_gallery_image_ids(array_slice($images,1)); $p->save(); }
+        foreach ($data['variants'] as $row) {
+            if (!array_key_exists('images',$row)) { continue; }
+            $vm=$this->engine->mapping($row['key']); $v=wc_get_product((int)$vm['local_id']); $ids=[];
+            foreach ($row['images'] as $url) { $ids[]=$this->importImage($url,$p->get_id()); }
+            $v->set_image_id($ids[0]??0); $v->update_meta_data('_wd29_variant_image_ids',$ids); $v->save();
         }
-        if ($images) { $p->set_image_id($images[0]); $p->set_gallery_image_ids(array_slice($images, 1)); $p->save(); }
         return $p->get_id();
     }
 
+    private function importImage(string $url,int $parent): int
+    {
+        require_once ABSPATH.'wp-admin/includes/file.php'; require_once ABSPATH.'wp-admin/includes/media.php'; require_once ABSPATH.'wp-admin/includes/image.php';
+        $existing=get_posts(['post_type'=>'attachment','post_status'=>'inherit','numberposts'=>1,'meta_key'=>'_wd29_bridge_source','meta_value'=>hash('sha256',$url),'fields'=>'ids']);
+        if ($existing) { return (int)$existing[0]; }
+        $bytes=Protocol::imageBytes($url,$this->config()['peer']); $info=getimagesizefromstring($bytes);
+        $extension=['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp'][$info['mime']]; $tmp=wp_tempnam('wd29-image');
+        try {
+            if (!$tmp || file_put_contents($tmp,$bytes)===false) { throw new \RuntimeException('Image staging failed.'); }
+            $id=media_handle_sideload(['name'=>hash('sha256',$url).'.'.$extension,'tmp_name'=>$tmp],$parent);
+            if (is_wp_error($id)) { throw new \RuntimeException('Image import failed.'); }
+            update_post_meta($id,'_wd29_bridge_source',hash('sha256',$url)); return (int)$id;
+        } finally { if ($tmp && is_file($tmp)) { unlink($tmp); } }
+    }
     public function stockDelta(array $map, int $delta): void
     {
         $p = wc_get_product((int) $map['local_id']);
@@ -283,7 +319,7 @@ final class WooAdapter
             $billing['last_name']=$billing['last_name']?:$c->get_last_name();
         }
         foreach (['first_name','last_name','email','phone','company'] as $field) { $blank[$field]=(string)($billing[$field]??''); }
-        $blank['billing']=$billing; $blank['shipping']=$shipping; return $blank;
+        $blank['billing']=$billing; $blank['shipping']=$shipping; $blank['addresses']=[['id'=>'billing','label'=>'Billing']+$billing,['id'=>'shipping','label'=>'Shipping']+$shipping]; return $blank;
     }
 
     public function orderContact(int $id): ?string

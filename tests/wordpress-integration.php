@@ -140,3 +140,35 @@ $audited = $e->catalogAudit();
 expect(count($audited)>0, "Catalog audit omitted captured products");
 expect(strpos(json_encode($audited), "customer@example.test") === false, "Catalog audit leaked order data");
 echo "PASS: catalog audit includes products without customer order data\n";
+
+update_option('wd29_bridge_config',['mode'=>'live','peer'=>'https://ps.example.test/module/wd29woobridge/webhook','secret'=>str_repeat('fixture-',8)],false);
+$extended=$foreign; $extended['key']='ps:product:8801'; $extended['inventory'][0]['key']=$extended['key'];
+$fixtureEan='2'.str_pad((string)random_int(1,999999999999),12,'0',STR_PAD_LEFT);
+$extended['identifiers']=['ean13'=>$fixtureEan,'upc'=>'','isbn'=>'','mpn'=>'MFG-42']; $extended['dimensions_cm']=['length'=>'12.5','width'=>'3','height'=>'2'];
+$extended['attributes']=[['name'=>'Material','options'=>['Cotton','Linen'],'variation'=>false]];
+$send(str_repeat('9',32),'product',$extended['key'],['base'=>'','hash'=>Engine::catalogHash($extended),'data'=>$extended]);
+$em=$e->mapping($extended['key']); expect($em!==null,'Extended Woo product failed');
+$round=$e->adapter->product((int)$em['local_id']);
+expect($round['identifiers']['ean13']===$fixtureEan && $round['identifiers']['mpn']==='MFG-42','Woo identifiers roundtrip failed');
+expect(abs((float)$round['dimensions_cm']['length']-12.5)<0.001,'Woo dimensions roundtrip failed');
+expect($round['attributes'][0]['options']===['Cotton','Linen'] && !$round['attributes'][0]['variation'],'Descriptive attributes lost');
+echo "PASS: WooCommerce GTIN, supplemental identifiers, dimensions and descriptive attributes\n";
+update_option('wd29_bridge_config',['mode'=>'disabled']);
+
+$contactWithBook=$contact; $contactWithBook['addresses']=[['id'=>'office','label'=>'Office','address_1'=>'2 Fixture Street','city'=>'Fixture','country'=>'FR','secret'=>'must-not-transfer']];
+$contactMethod=new ReflectionMethod(Engine::class,'contactData'); $contactMethod->setAccessible(true);
+$cleanBook=$contactMethod->invoke($e,$contactWithBook);
+expect(count($cleanBook['addresses'])===1 && !isset($cleanBook['addresses'][0]['secret']),'Address book sanitation failed');
+$missing=$e->adapter->contactProfile('customer',99999999);
+expect($missing['deleted']===true && $missing['email']==='','Missing source profile did not produce deletion marker');
+echo "PASS: complete contact address payload sanitation and missing source profile marker\n";
+
+update_option('wd29_bridge_config',['mode'=>'live','peer'=>'https://ps.example.test/module/wd29woobridge/webhook','secret'=>str_repeat('fixture-',8)],false);
+$url='https://ps.example.test/img/p/variant-fixture.jpg'; $imageId=wp_insert_attachment(['post_title'=>'Variant fixture','post_mime_type'=>'image/jpeg','post_status'=>'inherit'],wp_upload_dir()['path'].'/variant-fixture.jpg');
+update_post_meta($imageId,'_wd29_bridge_source',hash('sha256',$url));
+$variant['variants'][0]['images']=[$url]; $imageProductMap=$e->mapping($variant['key']);
+$send(str_repeat('b1',16),'product',$variant['key'],['base'=>$imageProductMap['fingerprint'],'hash'=>Engine::catalogHash($variant),'data'=>$variant]);
+expect(wc_get_product($e->mapping('ps:variant:903')['local_id'])->get_image_id('edit')===$imageId,'Variation-specific image was not applied');
+$roundImages=$e->adapter->product((int)$imageProductMap['local_id']); expect(count($roundImages['variants'][0]['images'])===1,'Variation-specific image export failed');
+echo "PASS: WooCommerce variation image association and export using cached media fixture\n";
+update_option('wd29_bridge_config',['mode'=>'disabled']);

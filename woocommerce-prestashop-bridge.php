@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.1.6
+ * Version: 0.1.7
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -160,7 +160,7 @@ function wd29_bridge_admin(): void {
     echo '</tr></thead><tbody>';
     foreach ($engine->report() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>' . esc_html((string) $cell) . '</td>'; } echo '</tr>'; }
     echo '</tbody></table><h2>Catalog audit</h2><p>Latest transmitted snapshots; unknown stock is not zero. Up to 200 products.</p><table class="widefat"><thead><tr>';
-    foreach (['source','local_id','name','brands','tags','type','regular','sale','tax','basis','initial_stock_snapshot'] as $heading) { echo '<th>' . esc_html($heading) . '</th>'; }
+    foreach (['source','local_id','name','brands','tags','type','regular','sale','tax','basis','initial_stock_snapshot','identifiers','dimensions_cm','features','variant_images'] as $heading) { echo '<th>' . esc_html($heading) . '</th>'; }
     echo '</tr></thead><tbody>';
     foreach ($engine->catalogAudit() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>' . esc_html((string)$cell) . '</td>'; } echo '</tr>'; }
     echo '</tbody></table><h2>Order reconciliation</h2><p>Unlinked historical lines retain their source details; catalog links are repaired once products are available.</p><table class="widefat"><thead><tr>';
@@ -168,7 +168,7 @@ function wd29_bridge_admin(): void {
     echo '</tr></thead><tbody>';
     foreach ($engine->orderReport() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>'.esc_html((string)$cell).'</td>'; } echo '</tr>'; }
     echo '</tbody></table><h2>Customer contact directory</h2><p>Read-only copies of contact details, edited on their source store. No login accounts, passwords or marketing consents are copied. Emails never merge identities automatically. Up to 200 contacts.</p><table class="widefat"><thead><tr>';
-    foreach (['source','name','email','phone','company','billing','type'] as $heading) { echo '<th>'.esc_html($heading).'</th>'; }
+    foreach (['source','name','email','phone','company','billing','addresses','shipping','type'] as $heading) { echo '<th>'.esc_html($heading).'</th>'; }
     echo '</tr></thead><tbody>';
     foreach ($engine->customerReport() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>'.esc_html((string)$cell).'</td>'; } echo '</tr>'; }
     echo '</tbody></table></div>';
