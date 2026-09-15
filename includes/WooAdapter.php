@@ -4,6 +4,15 @@ namespace WD29\Bridge;
 final class WooAdapter
 {
     public $engine;
+    public function afterRollback(string $kind,int $id): void
+    {
+        if (function_exists('acf_get_store')) { acf_get_store('values')->reset(); }
+        if ($id>0 && in_array($kind,['product','stock','order'],true)) {
+            clean_post_cache($id);
+            if ($kind==='order') { wc_delete_shop_order_transients($id); }
+            else { wc_delete_product_transients($id); }
+        }
+    }
     public function site(): string { return 'woo'; }
     public function prefix(): string { global $wpdb; return $wpdb->prefix; }
     public function config(): array { return (array) get_option('wd29_bridge_config', ['mode' => 'disabled']); }
@@ -34,7 +43,7 @@ final class WooAdapter
     public function ids(string $kind, int $offset, int $limit): array
     {
         if ($kind === 'customer') {
-            $ids=get_users(['role'=>'customer','fields'=>'ID','number'=>$limit,'offset'=>$offset,'orderby'=>'ID','order'=>'ASC']);
+            $ids=get_users(['role'=>'customer','meta_query'=>[['key'=>'_wd29_bridge_customer_origin','compare'=>'NOT EXISTS']],'fields'=>'ID','number'=>$limit,'offset'=>$offset,'orderby'=>'ID','order'=>'ASC']);
             return array_map(function($id){return $this->engine->contactId(Protocol::key('woo','customer',(int)$id));},$ids);
         }
         if ($kind === 'order') {
@@ -67,6 +76,23 @@ final class WooAdapter
             'status' => $product->get_stock_status(), 'backorders' => $product->get_backorders() !== 'no'];
     }
 
+    private function fieldResolvers(int $parentId): array
+    {
+        return [
+            'peerHost'=>(string)parse_url($this->config()['peer']??'',PHP_URL_HOST),
+            'imageId'=>function(string $url) use ($parentId) { return $this->importImage($url,$parentId); },
+            'productKey'=>function(int $id) {
+                $rows=$this->engine->sql("SELECT record_key FROM {b}map WHERE kind='product' AND local_id=?",[$id]);
+                if (!$rows) { throw new \RuntimeException('ACF referenced product must be synchronized first.'); }
+                return $rows[0]['record_key'];
+            },
+            'productId'=>function(string $key) {
+                $map=$this->engine->mapping($key);
+                if (!$map || $map['kind']!=='product') { throw new \RuntimeException('ACF referenced product is not mapped yet.'); }
+                return (int)$map['local_id'];
+            },
+        ];
+    }
     private function extraFields($p): array
     {
         $ids=(array)$p->get_meta('_wd29_identifiers');
@@ -76,7 +102,7 @@ final class WooAdapter
         elseif (preg_match('/^[0-9]{12}$/D',$gtin)) { $ids['upc']=$gtin; }
         $dimensions=[];
         foreach (['length','width','height'] as $field) { $value=$p->{'get_'.$field}(); $dimensions[$field]=$value===''?null:(string)wc_get_dimension((float)$value,'cm'); }
-        $extra=['identifiers'=>$ids,'dimensions_cm'=>$dimensions,'custom_fields'=>CustomFields::export($p)];
+        $extra=['identifiers'=>$ids,'dimensions_cm'=>$dimensions,'suppliers'=>Suppliers::export($p),'custom_fields'=>CustomFields::export($p,null,$this->fieldResolvers($p->get_id()))];
         if (metadata_exists('post',$p->get_id(),'_wd29_purchase_net')) { $extra['purchase_price_net']=(string)$p->get_meta('_wd29_purchase_net'); }
         if (metadata_exists('post',$p->get_id(),'_wd29_supplier_name')) { $extra['supplier']=['name'=>(string)$p->get_meta('_wd29_supplier_name'),'reference'=>(string)$p->get_meta('_wd29_supplier_reference')]; }
         if (!$p->is_type('variation') && (metadata_exists('post',$p->get_id(),'_yoast_wpseo_title') || metadata_exists('post',$p->get_id(),'_yoast_wpseo_metadesc'))) {
@@ -88,7 +114,7 @@ final class WooAdapter
     }
     private function applyExtraFields($p,array $row): void
     {
-        if (isset($row['custom_fields'])) { CustomFields::apply($p,$row['custom_fields']); }
+
         if (isset($row['purchase_price_net'])) {
             if (!is_numeric($row['purchase_price_net']) || (float)$row['purchase_price_net']<0) { throw new \RuntimeException('Invalid net purchasing cost.'); }
             $p->update_meta_data('_wd29_purchase_net',(string)$row['purchase_price_net']);
@@ -251,6 +277,8 @@ final class WooAdapter
         }
         $p->set_attributes($attributes);
         $p->save();
+        if (isset($data['suppliers'])) { Suppliers::apply($p,$data['suppliers']); $p->save(); }
+        if (isset($data['custom_fields'])) { CustomFields::apply($p,$data['custom_fields'],null,$this->fieldResolvers($p->get_id())); $p->save(); }
         foreach (['brands'=>'product_brand','tags'=>'product_tag'] as $field=>$taxonomy) {
             if (!isset($data[$field])) { continue; }
             if (!taxonomy_exists($taxonomy)) { if ($data[$field]) { throw new \RuntimeException('Required product taxonomy is unavailable.'); } continue; }
@@ -270,6 +298,8 @@ final class WooAdapter
             $this->applyExtraFields($v,$row);
             $v->set_weight(wc_get_weight((float) $row['weight_kg'], get_option('woocommerce_weight_unit', 'kg'), 'kg'));
             $v->save();
+            if (isset($row['suppliers'])) { Suppliers::apply($v,$row['suppliers']); $v->save(); }
+            if (isset($row['custom_fields'])) { CustomFields::apply($v,$row['custom_fields'],null,$this->fieldResolvers($p->get_id())); $v->save(); }
             $this->engine->bind($row['key'], 'variant', $v->get_id());
             if (!$vm) { $this->initializeStock($v, $row['key'], $data['inventory']); }
         }
@@ -351,6 +381,7 @@ final class WooAdapter
         } else {
             $u=get_userdata($id);
             if (!$u || !in_array('customer',$u->roles,true)) { $blank['deleted']=true; return $blank; }
+            $blank['custom_fields']=CustomFields::exportCustomer($id);
             $c=new \WC_Customer($id); $billing=$c->get_billing(); $shipping=$c->get_shipping();
             $billing['email']=$c->get_email();
             $billing['first_name']=$billing['first_name']?:$c->get_first_name();
@@ -359,6 +390,8 @@ final class WooAdapter
         foreach (['first_name','last_name','email','phone','company'] as $field) { $blank[$field]=(string)($billing[$field]??''); }
         $blank['billing']=$billing; $blank['shipping']=$shipping; $blank['addresses']=[['id'=>'billing','label'=>'Billing']+$billing,['id'=>'shipping','label'=>'Shipping']+$shipping]; return $blank;
     }
+
+    public function applyCustomerAccount(array $data): int { return CustomerAccounts::apply($this->engine,$data); }
 
     public function orderContact(int $id): ?string
     {
@@ -393,12 +426,13 @@ final class WooAdapter
         $snapshot = $o->get_meta('_wd29_bridge_snapshot');
         if (is_array($snapshot) && strpos($snapshot['key'], 'ps:') === 0) {
             if ($o->get_status()!==($o->get_meta('_wd29_bridge_mapped_status')?:$snapshot['status'])) { $snapshot['status'] = $o->get_status(); }
+            $snapshot['custom_fields']=CustomFields::export($o,'order');
             return $snapshot;
         }
         $items = [];
         foreach ($o->get_items() as $item) {
             $pid = $item->get_variation_id() ?: $item->get_product_id();
-            $items[] = ['product' => $pid ? $this->engine->identity($item->get_variation_id() ? 'variant' : 'product', $pid) : null,
+            $items[] = ['line_id'=>(string)$item->get_id(), 'product' => $pid ? $this->engine->identity($item->get_variation_id() ? 'variant' : 'product', $pid) : null,
                 'name' => $item->get_name(), 'quantity' => (int) $item->get_quantity(),
                 'net' => $item->get_total(), 'tax' => $item->get_total_tax()];
         }
@@ -406,7 +440,7 @@ final class WooAdapter
             'status' => $o->get_status(), 'currency' => $o->get_currency(), 'total' => $o->get_total(),
             'tax' => $o->get_total_tax(), 'shipping_net' => $o->get_shipping_total(), 'shipping_tax' => $o->get_shipping_tax(),
             'discount' => $o->get_discount_total(), 'billing' => $o->get_address('billing'), 'shipping' => $o->get_address('shipping'),
-            'items' => $items, 'created' => $o->get_date_created() ? $o->get_date_created()->date('c') : null];
+            'refunds'=>Refunds::export($o), 'custom_fields'=>CustomFields::export($o,'order'), 'items' => $items, 'created' => $o->get_date_created() ? $o->get_date_created()->date('c') : null];
     }
 
     public static function registerSourceStatuses(): void
@@ -456,17 +490,22 @@ final class WooAdapter
 
     public function applyOrder(array $data, ?array $map): int
     {
+        if (isset($data['refunds'])) { Refunds::validateOrder($data); }
         $destinationStatus=$this->destinationStatus($data);
         if (!isset(wc_get_order_statuses()['wc-' . $destinationStatus])) { throw new \RuntimeException('Unknown destination order status.'); }
         if ($map && strpos($data['key'], 'woo:') === 0) {
             $current = $this->order((int) $map['local_id']);
             $incoming = $data;
-            unset($current['status'], $incoming['status']);
+            unset($current['status'], $incoming['status'], $current['custom_fields'], $incoming['custom_fields']);
+            foreach (['current','incoming'] as $side) { foreach (${$side}['items'] as &$line) { unset($line['line_id']); } unset($line); }
+            if (!array_key_exists('refunds',$incoming)) { unset($current['refunds']); }
             if (Protocol::fingerprint($current) !== Protocol::fingerprint($incoming)) {
                 throw new \RuntimeException('Financial order edits must be made on the originating store.');
             }
             $o = wc_get_order((int) $map['local_id']);
-            $o->set_status($destinationStatus); $o->save();
+            $o->set_status($destinationStatus);
+            if (isset($data['custom_fields'])) { CustomFields::apply($o,$data['custom_fields'],'order'); }
+            $o->save();
             return $o->get_id();
         }
         $o = $map ? wc_get_order((int) $map['local_id']) : new \WC_Order();
@@ -477,6 +516,7 @@ final class WooAdapter
             $o->set_customer_id(0);
             $o->update_meta_data('_wd29_bridge_origin', 'ps');
         }
+        if (isset($data['refunds'])) { Refunds::apply($o,$data); }
         $o->update_meta_data('_wd29_bridge_snapshot', $data);
         $o->update_meta_data('_wd29_bridge_mapped_status',$destinationStatus);
         $o->set_currency($data['currency']);
@@ -486,16 +526,23 @@ final class WooAdapter
         $o->set_payment_method_title('Recorded on source store');
         if (!$map && !empty($data['created'])) { $o->set_date_created($data['created']); }
         $o->save();
-        // Rebuild only mirrored lines; native source order lines are never overwritten.
-        foreach ($o->get_items(['line_item', 'shipping', 'tax', 'fee']) as $item) { $o->remove_item($item->get_id()); }
+        if (isset($data['custom_fields'])) { CustomFields::apply($o,$data['custom_fields'],'order'); $o->save(); }
+        // Keep native line identities stable for external references and refund reconciliation.
+        $existingLines=array_values($o->get_items()); $bySource=[];
+        foreach ($existingLines as $index=>$item) { $lineKey=$item->get_meta('_wd29_source_line'); $bySource[$lineKey!==''?$lineKey:'legacy:'.$index]=$item; }
+        $kept=[];
+        foreach ($o->get_items(['shipping', 'tax', 'fee']) as $item) { $o->remove_item($item->get_id()); }
         $sum = (float) $data['shipping_net'] + (float) $data['shipping_tax'];
-        foreach ($data['items'] as $row) {
-            $item = new \WC_Order_Item_Product();
+        foreach ($data['items'] as $index=>$row) {
+            $lineKey=isset($row['line_id'])?'source:'.$row['line_id']:'legacy:'.$index;
+            if (isset($kept[$lineKey])) { throw new \RuntimeException('Duplicate source order line.'); }
+            $item=$bySource[$lineKey]??($bySource['legacy:'.$index]??new \WC_Order_Item_Product());
+            $kept[$lineKey]=$item->get_id(); $item->update_meta_data('_wd29_source_line',$lineKey);
             if (!empty($row['product'])) {
                 $productMap = $this->engine->mapping($row['product']);
                 $p = $productMap ? wc_get_product((int)$productMap['local_id']) : false;
                 if ($p) { $item->set_product($p); }
-                $item->add_meta_data('_wd29_source_product', $row['product'], true);
+                $item->update_meta_data('_wd29_source_product', $row['product']);
             }
             $item->set_name($row['name']); $item->set_quantity((int) $row['quantity']);
             $item->set_subtotal($row['net']); $item->set_total($row['net']);
@@ -503,6 +550,7 @@ final class WooAdapter
             $o->add_item($item);
             $sum += (float) $row['net'] + (float) $row['tax'];
         }
+        foreach ($existingLines as $old) { if (!in_array($old->get_id(),array_values($kept),true)) { $o->remove_item($old->get_id()); } }
         if (abs($sum - (float) $data['total']) > 0.02) {
             $lineNet = (float)$data['shipping_net']; $lineTax = (float)$data['shipping_tax'];
             foreach ($data['items'] as $row) { $lineNet += (float)$row['net']; $lineTax += (float)$row['tax']; }

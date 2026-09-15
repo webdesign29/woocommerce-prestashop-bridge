@@ -9,7 +9,7 @@ if (!function_exists('acf_add_local_field_group')) { throw new RuntimeException(
 acf_add_local_field_group(['key'=>'group_wd29_fixture','title'=>'Fixture','fields'=>[
  ['key'=>'field_wd29_note','name'=>'fixture_note','type'=>'text','label'=>'Note'],
  ['key'=>'field_wd29_choice','name'=>'fixture_choice','type'=>'checkbox','label'=>'Choice','choices'=>['a'=>'A','b'=>'B']],
- ['key'=>'field_wd29_relation','name'=>'fixture_relation','type'=>'relationship','label'=>'Relation'],
+ ['key'=>'field_wd29_relation','name'=>'fixture_relation','type'=>'file','label'=>'Unsupported file'],
 ]]);
 $rules=[['id'=>'note','source'=>'acf','key'=>'field_wd29_note'],['id'=>'choice','source'=>'acf','key'=>'field_wd29_choice'],['id'=>'extra','source'=>'meta','key'=>'fixture_extra']];
 update_option('wd29_bridge_custom_fields',CustomFields::rules($rules));
@@ -34,6 +34,6 @@ try {
  $blocked=false; try { CustomFields::value(new stdClass()); } catch (Throwable $e) { $blocked=true; } expect($blocked,'Object accepted');
  $blocked=false; try { CustomFields::apply($p,['choice'=>['present'=>true,'value'=>['unknown']]]); } catch (Throwable $e) { $blocked=true; } expect($blocked,'Unknown ACF choice accepted');
  update_option('wd29_bridge_custom_fields',[['id'=>'relation','source'=>'acf','key'=>'field_wd29_relation']]);
- $blocked=false; try { CustomFields::export($p); } catch (Throwable $e) { $blocked=true; } expect($blocked,'Unmapped ACF relationship accepted');
+ $blocked=false; try { CustomFields::export($p); } catch (Throwable $e) { $blocked=true; } expect($blocked,'Unsupported ACF file accepted');
  echo "PASS: native ACF values/references, choices, custom JSON, variation, tombstone, omission, allowlist and reserved fields\n";
 } finally { update_option('wd29_bridge_custom_fields',[]); }

@@ -3,10 +3,10 @@ from zipfile import ZipFile, ZIP_DEFLATED
 import hashlib
 root = Path(__file__).resolve().parents[1]
 slug = 'woocommerce-prestashop-bridge'
-files = [root / name for name in ['woocommerce-prestashop-bridge.php', 'README.md', 'LICENSE']]
+files = [root / name for name in ['woocommerce-prestashop-bridge.php', 'README.md', 'LICENSE', 'OPERATIONS.md', 'SUPPLIERS.md', 'CUSTOM-FIELDS.md']]
 for directory in ['includes']:
     files.extend(sorted((root / directory).rglob('*.php')))
-output = root / 'dist' / (slug + '-0.1.10.zip')
+output = root / 'dist' / (slug + '-0.2.0.zip')
 output.parent.mkdir(exist_ok=True)
 with ZipFile(output, 'w', ZIP_DEFLATED) as archive:
     for file in files:

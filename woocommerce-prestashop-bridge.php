@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.1.10
+ * Version: 0.2.0
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -13,8 +13,13 @@
 defined('ABSPATH') || exit;
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/Engine.php';
+require_once __DIR__ . '/includes/CustomerAccounts.php';
+require_once __DIR__ . '/includes/Refunds.php';
+require_once __DIR__ . '/includes/Suppliers.php';
+require_once __DIR__ . '/includes/DiagnosticsAdmin.php';
 require_once __DIR__ . '/includes/WooAdapter.php';
 require_once __DIR__ . '/includes/CustomFields.php';
+require_once __DIR__ . '/includes/CustomFieldsAdmin.php';
 
 function wd29_bridge(): \WD29\Bridge\Engine {
     static $engine;
@@ -36,7 +41,7 @@ register_activation_hook(__FILE__, function () {
 register_deactivation_hook(__FILE__, function () { wp_clear_scheduled_hook('wd29_bridge_tick'); });
 add_filter('cron_schedules', function ($schedules) { $schedules['wd29_minute'] = ['interval' => 60, 'display' => 'Every minute (WD29 bridge)']; return $schedules; });
 add_action('plugins_loaded', function () {
-    if (get_option('wd29_bridge_schema') !== '4') { wd29_bridge()->install(); update_option('wd29_bridge_schema','4',false); }
+    if (get_option('wd29_bridge_schema') !== '5') { wd29_bridge()->install(); update_option('wd29_bridge_schema','5',false); }
 }, 30);
 add_action('wd29_bridge_tick', function () { if (function_exists('wc_get_product')) { wd29_bridge()->tick(); } });
 function wd29_bridge_capture_later(string $kind, int $id): void {
@@ -100,8 +105,11 @@ function wd29_bridge_admin(): void {
                 $policy = sanitize_key($_POST['conflict_policy'] ?? 'review');
                 if (!in_array($policy, ['review','woo','ps'], true)) { throw new \RuntimeException('Invalid conflict policy.'); }
                 $engine->validateSettings($mode, $peer, $secret !== '' ? $secret : ($config['secret'] ?? ''));
-                update_option('wd29_bridge_config', ['mode' => $mode, 'peer' => $peer, 'secret' => $secret !== '' ? $secret : ($config['secret'] ?? ''), 'conflict_policy' => $policy], false);
+                update_option('wd29_bridge_config', ['mode' => $mode, 'peer' => $peer, 'secret' => $secret !== '' ? $secret : ($config['secret'] ?? ''), 'conflict_policy' => $policy, 'native_customers'=>!empty($_POST['native_customers'])], false);
                 $message = 'Settings saved.';
+            } elseif ($action === 'save_field_rows') {
+                update_option('wd29_bridge_custom_fields', \WD29\Bridge\CustomFieldsAdmin::submitted(wp_unslash($_POST['field_rows']??[])),false);
+                $message='Custom field mappings saved.';
             } elseif ($action === 'save_custom_fields') {
                 $rules=json_decode(wp_unslash($_POST['custom_fields']??'[]'),true,32,JSON_THROW_ON_ERROR);
                 update_option('wd29_bridge_custom_fields', \WD29\Bridge\CustomFields::rules($rules),false);
@@ -143,16 +151,16 @@ function wd29_bridge_admin(): void {
     foreach (['review'=>'Pause for review','woo'=>'Prefer WooCommerce','ps'=>'Prefer PrestaShop'] as $value=>$label) { echo '<option value="'.esc_attr($value).'" '.selected($config['conflict_policy'] ?? 'review',$value,false).'>'.esc_html($label).'</option>'; }
     echo '</select></label> Use the same policy on both stores.</p>';
     echo '<p><label>Shared secret <input type="password" name="secret" autocomplete="new-password" value=""></label> Leave blank to keep the configured secret.</p>';
+    echo '<p><label><input type="checkbox" name="native_customers" value="1" '.checked(!empty($config['native_customers']),true,false).'> Create native customer accounts for registered source customers (independent passwords; no email merging)</label></p>';
     echo '<button class="button button-primary" name="bridge_action" value="save">Save settings</button></form><hr><form method="post">';
     wp_nonce_field('wd29_bridge_admin');
     echo '<p><label>Batch offset <input type="number" min="0" name="offset" value="0"></label> Batches contain up to 10 records per store.</p>';
     foreach (['health' => 'Test connection', 'seed_products' => 'Capture both catalogs', 'seed_orders' => 'Capture both order histories', 'seed_customers' => 'Capture customer contacts', 'tick' => 'Process queue', 'retry' => 'Retry failures', 'resolve_catalog'=>'Retry catalog conflicts with selected priority', 'normalize_stock'=>'Set unknown Woo variation quantities to zero'] as $value => $label) {
         echo '<button class="button" name="bridge_action" value="' . esc_attr($value) . '">' . esc_html($label) . '</button> ';
     }
-    echo '</form><h2>Product and variation custom fields</h2><p>Explicit allowlist only. JSON example: [{&quot;id&quot;:&quot;material_note&quot;,&quot;source&quot;:&quot;meta&quot;,&quot;key&quot;:&quot;material_note&quot;}]. Use source acf and an existing local field key/name for ACF. Values are retained privately in PrestaShop; this does not map KerAwen fields. ACF media, relationships, repeaters and flexible content require dedicated adapters.</p><form method="post">';
-    wp_nonce_field('wd29_bridge_admin');
-    echo '<textarea class="large-text code" rows="6" name="custom_fields">'.esc_textarea(wp_json_encode(get_option('wd29_bridge_custom_fields',[]),JSON_PRETTY_PRINT)).'</textarea><button class="button" name="bridge_action" value="save_custom_fields">Save custom field mappings</button>';
-    echo '</form><h2>PrestaShop order status mappings</h2><p>Unknown source statuses are created automatically with their original label. Choose an existing WooCommerce status if needed. This changes mirror presentation only; the original PrestaShop status stays unchanged.</p><form method="post">';
+    echo '</form>';
+    \WD29\Bridge\CustomFieldsAdmin::render();
+    echo '<h2>PrestaShop order status mappings</h2><p>Unknown source statuses are created automatically with their original label. Choose an existing WooCommerce status if needed. This changes mirror presentation only; the original PrestaShop status stays unchanged.</p><form method="post">';
     wp_nonce_field('wd29_bridge_admin');
     $statusMappings=(array)get_option('wd29_bridge_status_mapping',[]);
     foreach ((array)get_option('wd29_bridge_source_statuses',[]) as $key=>$label) {
@@ -163,7 +171,7 @@ function wd29_bridge_admin(): void {
         echo '</select></label></p>';
     }
     echo '<button class="button" name="bridge_action" value="save_statuses">Save status mappings</button>';
-    echo '</form><p>' . esc_html(get_option('wd29_bridge_notice', '')) . '</p><h2>Latest events</h2><table class="widefat"><thead><tr>';
+    echo '</form>'.\WD29\Bridge\DiagnosticsAdmin::render($engine).'<p>Last historical notice (use diagnostics above for current state): ' . esc_html(get_option('wd29_bridge_notice', '')) . '</p><h2>Latest events</h2><table class="widefat"><thead><tr>';
     foreach (['seq','direction','kind','record_key','state','attempts','error','created_at'] as $heading) { echo '<th>' . esc_html($heading) . '</th>'; }
     echo '</tr></thead><tbody>';
     foreach ($engine->report() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>' . esc_html((string) $cell) . '</td>'; } echo '</tr>'; }

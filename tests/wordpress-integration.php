@@ -9,7 +9,7 @@ require_once __DIR__ . '/protocol.php';
 use WD29\Bridge\Protocol;
 use WD29\Bridge\Engine;
 $e = wd29_bridge();
-$e->install(); $e->sql('TRUNCATE TABLE {b}contacts'); $e->sql('TRUNCATE TABLE {b}queue'); $e->sql('TRUNCATE TABLE {b}map');
+$e->install(); $e->sql('TRUNCATE TABLE {b}contacts'); $e->sql('TRUNCATE TABLE {b}queue'); $e->sql('TRUNCATE TABLE {b}map'); $e->sql('TRUNCATE TABLE {b}order_lines'); $e->sql('TRUNCATE TABLE {b}issues');
 update_option('wd29_bridge_config', ['mode' => 'audit', 'peer' => 'https://ps.example.test/webhook', 'secret' => str_repeat('fixture-', 8)]);
 update_option('woocommerce_currency', 'EUR'); update_option('woocommerce_calc_taxes', 'no');
 $apply = new ReflectionMethod(Engine::class, 'apply'); $apply->setAccessible(true);
@@ -200,3 +200,11 @@ expect(wc_get_product($nv->get_id())->get_manage_stock('edit')===true && (int)wc
 expect((int)wc_get_product($nk->get_id())->get_stock_quantity()===4,'Known quantity changed');
 echo "PASS: explicit stock normalization preserves known quantities\n";
 update_option('wd29_bridge_config',['mode'=>'disabled']);
+
+$stableMap=$e->mapping($order['key']); $beforeIds=array_keys(wc_get_order($stableMap['local_id'])->get_items());
+$order['items'][0]['line_id']='12345'; $order['custom_fields']=[];
+$e->orderApplying=true;
+try { $e->adapter->applyOrder($order,$stableMap); $e->adapter->applyOrder($order,$stableMap); }
+finally { $e->orderApplying=false; }
+expect(array_keys(wc_get_order($stableMap['local_id'])->get_items())===$beforeIds,'Source line ID upgrade/replay replaced native Woo line IDs');
+echo "PASS: stable Woo mirrored line IDs across legacy identity upgrade and repeated updates\n";
