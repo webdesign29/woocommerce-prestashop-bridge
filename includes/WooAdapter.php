@@ -76,7 +76,7 @@ final class WooAdapter
         elseif (preg_match('/^[0-9]{12}$/D',$gtin)) { $ids['upc']=$gtin; }
         $dimensions=[];
         foreach (['length','width','height'] as $field) { $value=$p->{'get_'.$field}(); $dimensions[$field]=$value===''?null:(string)wc_get_dimension((float)$value,'cm'); }
-        $extra=['identifiers'=>$ids,'dimensions_cm'=>$dimensions];
+        $extra=['identifiers'=>$ids,'dimensions_cm'=>$dimensions,'custom_fields'=>CustomFields::export($p)];
         if (metadata_exists('post',$p->get_id(),'_wd29_purchase_net')) { $extra['purchase_price_net']=(string)$p->get_meta('_wd29_purchase_net'); }
         if (metadata_exists('post',$p->get_id(),'_wd29_supplier_name')) { $extra['supplier']=['name'=>(string)$p->get_meta('_wd29_supplier_name'),'reference'=>(string)$p->get_meta('_wd29_supplier_reference')]; }
         if (!$p->is_type('variation') && (metadata_exists('post',$p->get_id(),'_yoast_wpseo_title') || metadata_exists('post',$p->get_id(),'_yoast_wpseo_metadesc'))) {
@@ -88,6 +88,7 @@ final class WooAdapter
     }
     private function applyExtraFields($p,array $row): void
     {
+        if (isset($row['custom_fields'])) { CustomFields::apply($p,$row['custom_fields']); }
         if (isset($row['purchase_price_net'])) {
             if (!is_numeric($row['purchase_price_net']) || (float)$row['purchase_price_net']<0) { throw new \RuntimeException('Invalid net purchasing cost.'); }
             $p->update_meta_data('_wd29_purchase_net',(string)$row['purchase_price_net']);

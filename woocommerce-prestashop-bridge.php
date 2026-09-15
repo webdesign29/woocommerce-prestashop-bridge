@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.1.9
+ * Version: 0.1.10
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -14,6 +14,7 @@ defined('ABSPATH') || exit;
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/Engine.php';
 require_once __DIR__ . '/includes/WooAdapter.php';
+require_once __DIR__ . '/includes/CustomFields.php';
 
 function wd29_bridge(): \WD29\Bridge\Engine {
     static $engine;
@@ -101,6 +102,10 @@ function wd29_bridge_admin(): void {
                 $engine->validateSettings($mode, $peer, $secret !== '' ? $secret : ($config['secret'] ?? ''));
                 update_option('wd29_bridge_config', ['mode' => $mode, 'peer' => $peer, 'secret' => $secret !== '' ? $secret : ($config['secret'] ?? ''), 'conflict_policy' => $policy], false);
                 $message = 'Settings saved.';
+            } elseif ($action === 'save_custom_fields') {
+                $rules=json_decode(wp_unslash($_POST['custom_fields']??'[]'),true,32,JSON_THROW_ON_ERROR);
+                update_option('wd29_bridge_custom_fields', \WD29\Bridge\CustomFields::rules($rules),false);
+                $message='Custom field allowlist saved. Capture catalogs to synchronize selected fields.';
             } elseif ($action === 'save_statuses') {
                 $mapping=[]; $submitted=wp_unslash($_POST['status_mapping']??[]);
                 if (!is_array($submitted)) { throw new \RuntimeException('Invalid status mappings.'); }
@@ -144,6 +149,9 @@ function wd29_bridge_admin(): void {
     foreach (['health' => 'Test connection', 'seed_products' => 'Capture both catalogs', 'seed_orders' => 'Capture both order histories', 'seed_customers' => 'Capture customer contacts', 'tick' => 'Process queue', 'retry' => 'Retry failures', 'resolve_catalog'=>'Retry catalog conflicts with selected priority', 'normalize_stock'=>'Set unknown Woo variation quantities to zero'] as $value => $label) {
         echo '<button class="button" name="bridge_action" value="' . esc_attr($value) . '">' . esc_html($label) . '</button> ';
     }
+    echo '</form><h2>Product and variation custom fields</h2><p>Explicit allowlist only. JSON example: [{&quot;id&quot;:&quot;material_note&quot;,&quot;source&quot;:&quot;meta&quot;,&quot;key&quot;:&quot;material_note&quot;}]. Use source acf and an existing local field key/name for ACF. Values are retained privately in PrestaShop; this does not map KerAwen fields. ACF media, relationships, repeaters and flexible content require dedicated adapters.</p><form method="post">';
+    wp_nonce_field('wd29_bridge_admin');
+    echo '<textarea class="large-text code" rows="6" name="custom_fields">'.esc_textarea(wp_json_encode(get_option('wd29_bridge_custom_fields',[]),JSON_PRETTY_PRINT)).'</textarea><button class="button" name="bridge_action" value="save_custom_fields">Save custom field mappings</button>';
     echo '</form><h2>PrestaShop order status mappings</h2><p>Unknown source statuses are created automatically with their original label. Choose an existing WooCommerce status if needed. This changes mirror presentation only; the original PrestaShop status stays unchanged.</p><form method="post">';
     wp_nonce_field('wd29_bridge_admin');
     $statusMappings=(array)get_option('wd29_bridge_status_mapping',[]);
