@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.2.1
+ * Version: 0.2.2
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -13,6 +13,7 @@
 defined('ABSPATH') || exit;
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/Engine.php';
+require_once __DIR__ . '/includes/AdminDesign.php';
 require_once __DIR__ . '/includes/OrderConflicts.php';
 require_once __DIR__ . '/includes/CustomerAccounts.php';
 require_once __DIR__ . '/includes/Refunds.php';
@@ -143,6 +144,7 @@ function wd29_bridge_admin(): void {
         } catch (\Throwable $e) { $message = $e->getMessage(); }
     }
     $config = $engine->config();
+    ob_start();
     echo '<div class="wrap"><h1>PrestaShop Bridge</h1><p>Direct connection. Audit mode queues incoming changes without applying them. Existing records keep their source identity; blank SKUs never match automatically.</p>';
     if ($message) { echo '<div class="notice notice-info"><p>' . esc_html($message) . '</p></div>'; }
     echo '<p><strong>Local webhook:</strong> <code>' . esc_html(rest_url('wd29-bridge/v1/webhook')) . '</code></p>';
@@ -195,6 +197,7 @@ function wd29_bridge_admin(): void {
     echo '</tr></thead><tbody>';
     foreach ($engine->customerReport() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>'.esc_html((string)$cell).'</td>'; } echo '</tr>'; }
     echo '</tbody></table></div>';
+    echo \WD29\Bridge\AdminDesign::render(ob_get_clean(), $engine, 'woo');
 }
 
 add_action('woocommerce_product_options_general_product_data',function(){
