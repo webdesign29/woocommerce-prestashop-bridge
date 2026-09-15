@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.1.1
+ * Version: 0.1.2
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
