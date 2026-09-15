@@ -313,7 +313,7 @@ final class WooAdapter
         if (!$o || $o->get_type() !== 'shop_order') { throw new \RuntimeException('Order not found.'); }
         $snapshot = $o->get_meta('_wd29_bridge_snapshot');
         if (is_array($snapshot) && strpos($snapshot['key'], 'ps:') === 0) {
-            $snapshot['status'] = $o->get_status();
+            if ($o->get_status()!==($o->get_meta('_wd29_bridge_mapped_status')?:$snapshot['status'])) { $snapshot['status'] = $o->get_status(); }
             return $snapshot;
         }
         $items = [];
@@ -330,9 +330,55 @@ final class WooAdapter
             'items' => $items, 'created' => $o->get_date_created() ? $o->get_date_created()->date('c') : null];
     }
 
+    public static function registerSourceStatuses(): void
+    {
+        foreach ((array)get_option('wd29_bridge_source_statuses',[]) as $key=>$label) {
+            if (!preg_match('/^ps-state-[1-9][0-9]{0,7}$/D',$key)) { continue; }
+            register_post_status('wc-'.$key,['label'=>'PrestaShop: '.$label,'public'=>false,'exclude_from_search'=>true,'show_in_admin_all_list'=>true,'show_in_admin_status_list'=>true]);
+        }
+    }
+    public static function statusList(array $statuses): array
+    {
+        foreach ((array)get_option('wd29_bridge_source_statuses',[]) as $key=>$label) {
+            if (preg_match('/^ps-state-[1-9][0-9]{0,7}$/D',$key)) { $statuses['wc-'.$key]='PrestaShop: '.$label; }
+        }
+        return $statuses;
+    }
+    public function destinationStatus(array $data): string
+    {
+        $status=(string)$data['status'];
+        if (strpos($data['key'],'ps:')===0 && preg_match('/^ps-state-([1-9][0-9]{0,7})$/D',$status,$match)) {
+            if ((int)($data['source_status']['id']??0)!==(int)$match[1]) { throw new \RuntimeException('Invalid source status identity.'); }
+            $label=sanitize_text_field($data['source_status']['label']??'');
+            if ($label==='' || strlen($label)>200) { throw new \RuntimeException('Invalid source status label.'); }
+            $known=(array)get_option('wd29_bridge_source_statuses',[]);
+            if (($known[$status]??null)!==$label) { $known[$status]=$label; update_option('wd29_bridge_source_statuses',$known,false); }
+            self::registerSourceStatuses();
+            $mapping=(array)get_option('wd29_bridge_status_mapping',[]);
+            return $mapping[$status]??$status;
+        }
+        return $status;
+    }
+    public function applyStatusMappings(): int
+    {
+        $count=0; $this->engine->orderApplying=true;
+        try {
+            foreach ($this->engine->sql("SELECT local_id FROM {b}map WHERE kind='order' AND record_key LIKE 'ps:%'") as $row) {
+                $o=wc_get_order((int)$row['local_id']); if (!$o) { continue; }
+                $snapshot=$o->get_meta('_wd29_bridge_snapshot');
+                if (!is_array($snapshot) || strpos($snapshot['status']??'','ps-state-')!==0) { continue; }
+                if ($o->get_status()!==($o->get_meta('_wd29_bridge_mapped_status')?:$snapshot['status'])) { continue; }
+                $target=$this->destinationStatus($snapshot);
+                $o->set_status($target); $o->update_meta_data('_wd29_bridge_mapped_status',$target); $o->save(); $count++;
+            }
+        } finally { $this->engine->orderApplying=false; }
+        return $count;
+    }
+
     public function applyOrder(array $data, ?array $map): int
     {
-        if (!isset(wc_get_order_statuses()['wc-' . $data['status']])) { throw new \RuntimeException('Unknown destination order status.'); }
+        $destinationStatus=$this->destinationStatus($data);
+        if (!isset(wc_get_order_statuses()['wc-' . $destinationStatus])) { throw new \RuntimeException('Unknown destination order status.'); }
         if ($map && strpos($data['key'], 'woo:') === 0) {
             $current = $this->order((int) $map['local_id']);
             $incoming = $data;
@@ -341,7 +387,7 @@ final class WooAdapter
                 throw new \RuntimeException('Financial order edits must be made on the originating store.');
             }
             $o = wc_get_order((int) $map['local_id']);
-            $o->set_status($data['status']); $o->save();
+            $o->set_status($destinationStatus); $o->save();
             return $o->get_id();
         }
         $o = $map ? wc_get_order((int) $map['local_id']) : new \WC_Order();
@@ -353,9 +399,10 @@ final class WooAdapter
             $o->update_meta_data('_wd29_bridge_origin', 'ps');
         }
         $o->update_meta_data('_wd29_bridge_snapshot', $data);
+        $o->update_meta_data('_wd29_bridge_mapped_status',$destinationStatus);
         $o->set_currency($data['currency']);
         $o->set_address($data['billing'], 'billing'); $o->set_address($data['shipping'], 'shipping');
-        $o->set_status($data['status']);
+        $o->set_status($destinationStatus);
         $o->set_payment_method('');
         $o->set_payment_method_title('Recorded on source store');
         if (!$map && !empty($data['created'])) { $o->set_date_created($data['created']); }

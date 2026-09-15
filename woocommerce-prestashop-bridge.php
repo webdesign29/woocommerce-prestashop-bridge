@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.1.4
+ * Version: 0.1.5
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -24,6 +24,8 @@ function wd29_bridge(): \WD29\Bridge\Engine {
     }
     return $engine;
 }
+add_action('init', ['\WD29\Bridge\WooAdapter','registerSourceStatuses']);
+add_filter('wc_order_statuses', ['\WD29\Bridge\WooAdapter','statusList']);
 register_activation_hook(__FILE__, function () {
     if (!class_exists('WooCommerce') || !extension_loaded('curl')) { wp_die('WooCommerce and PHP cURL are required.'); }
     wd29_bridge()->install();
@@ -99,6 +101,16 @@ function wd29_bridge_admin(): void {
                 $engine->validateSettings($mode, $peer, $secret !== '' ? $secret : ($config['secret'] ?? ''));
                 update_option('wd29_bridge_config', ['mode' => $mode, 'peer' => $peer, 'secret' => $secret !== '' ? $secret : ($config['secret'] ?? ''), 'conflict_policy' => $policy], false);
                 $message = 'Settings saved.';
+            } elseif ($action === 'save_statuses') {
+                $mapping=[]; $submitted=wp_unslash($_POST['status_mapping']??[]);
+                if (!is_array($submitted)) { throw new \RuntimeException('Invalid status mappings.'); }
+                foreach ((array)get_option('wd29_bridge_source_statuses',[]) as $key=>$label) {
+                    $target=(string)($submitted[$key]??$key);
+                    if ($target!==$key && !in_array($target,['pending','on-hold','processing','completed','cancelled','refunded','failed'],true)) { throw new \RuntimeException('Invalid destination status.'); }
+                    $mapping[$key]=$target;
+                }
+                update_option('wd29_bridge_status_mapping',$mapping,false);
+                $message='Status mappings saved; existing mirrors updated: '.$engine->adapter->applyStatusMappings();
             } elseif ($action === 'health') { $message = wp_json_encode($engine->peer(['op' => 'health'])); }
             elseif ($action === 'tick') { $engine->tick(); $message = 'Queue processed; inspect the result below.'; }
             elseif ($action === 'retry') { $engine->retry(); $message = 'Failed events queued again.'; }
@@ -132,6 +144,17 @@ function wd29_bridge_admin(): void {
     foreach (['health' => 'Test connection', 'seed_products' => 'Capture both catalogs', 'seed_orders' => 'Capture both order histories', 'seed_customers' => 'Capture customer contacts', 'tick' => 'Process queue', 'retry' => 'Retry failures', 'resolve_catalog'=>'Retry catalog conflicts with selected priority'] as $value => $label) {
         echo '<button class="button" name="bridge_action" value="' . esc_attr($value) . '">' . esc_html($label) . '</button> ';
     }
+    echo '</form><h2>PrestaShop order status mappings</h2><p>Unknown source statuses are created automatically with their original label. Choose an existing WooCommerce status if needed. This changes mirror presentation only; the original PrestaShop status stays unchanged.</p><form method="post">';
+    wp_nonce_field('wd29_bridge_admin');
+    $statusMappings=(array)get_option('wd29_bridge_status_mapping',[]);
+    foreach ((array)get_option('wd29_bridge_source_statuses',[]) as $key=>$label) {
+        echo '<p><label>'.esc_html($label).' <select name="status_mapping['.esc_attr($key).']">';
+        foreach ([$key=>'Automatic — PrestaShop: '.$label,'pending'=>'Pending payment','on-hold'=>'On hold','processing'=>'Processing','completed'=>'Completed','cancelled'=>'Cancelled','refunded'=>'Refunded','failed'=>'Failed'] as $value=>$text) {
+            echo '<option value="'.esc_attr($value).'" '.selected($statusMappings[$key]??$key,$value,false).'>'.esc_html($text).'</option>';
+        }
+        echo '</select></label></p>';
+    }
+    echo '<button class="button" name="bridge_action" value="save_statuses">Save status mappings</button>';
     echo '</form><p>' . esc_html(get_option('wd29_bridge_notice', '')) . '</p><h2>Latest events</h2><table class="widefat"><thead><tr>';
     foreach (['seq','direction','kind','record_key','state','attempts','error','created_at'] as $heading) { echo '<th>' . esc_html($heading) . '</th>'; }
     echo '</tr></thead><tbody>';
