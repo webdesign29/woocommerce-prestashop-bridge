@@ -4,6 +4,22 @@ namespace WD29\Bridge;
 final class WooAdapter
 {
     public $engine;
+    public function restoreGallery(string $key): void
+    {
+        $lock=substr($this->prefix().'wd29_bridge_worker',0,64);
+        if ((int)($this->sql('SELECT GET_LOCK(?,5) AS acquired',[$lock])[0]['acquired']??0)!==1) { throw new \RuntimeException('Gallery is busy; retry.'); }
+        try {
+            $this->sql('START TRANSACTION'); $map=$this->engine->mapping($key);
+            if (!$map || !in_array($map['kind'],['product','variant'],true)) { throw new \RuntimeException('Choose a mapped product or variation key.'); }
+            $product=wc_get_product((int)$map['local_id']);
+            if (!$product) { throw new \RuntimeException('Mapped product no longer exists.'); }
+            Gallery::restore($product); $product->save();
+            $pid=$product->is_type('variation')?(int)$product->get_parent_id():(int)$product->get_id();
+            $this->sql('COMMIT'); $this->engine->capture('product',$pid);
+        } catch (\Throwable $error) { $this->sql('ROLLBACK'); throw $error; }
+        finally { $this->sql('SELECT RELEASE_LOCK(?)',[$lock]); }
+    }
+
     public function afterRollback(string $kind,int $id): void
     {
         if (function_exists('acf_get_store')) { acf_get_store('values')->reset(); }
@@ -14,6 +30,15 @@ final class WooAdapter
         }
     }
     public function site(): string { return 'woo'; }
+    /** A trashed product still exists and is not a permanent deletion. */
+    public function productExists(int $id): bool { return get_post_type($id)==='product'; }
+    public function archiveProduct(int $id): void
+    {
+        $product=wc_get_product($id);
+        if (!$product) { throw new \RuntimeException('Mirror product no longer exists.'); }
+        if ($product->get_status()!=='trash') { $product->set_status('draft'); $product->save(); }
+    }
+
     public function prefix(): string { global $wpdb; return $wpdb->prefix; }
     public function config(): array { return (array) get_option('wd29_bridge_config', ['mode' => 'disabled']); }
     public function workerStatus(?string $state=null): array
@@ -306,12 +331,12 @@ final class WooAdapter
         if ($p->is_type('variable')) { \WC_Product_Variable::sync($p->get_id()); }
         $images=[];
         foreach ($data['images'] as $url) { $images[]=$this->importImage($url,$p->get_id()); }
-        if ($images) { $p->set_image_id($images[0]); $p->set_gallery_image_ids(array_slice($images,1)); $p->save(); }
+        if (array_key_exists('images',$data)) { Gallery::apply($p,$images,!empty($this->config()['sync_gallery_removals'])); $p->save(); }
         foreach ($data['variants'] as $row) {
             if (!array_key_exists('images',$row)) { continue; }
             $vm=$this->engine->mapping($row['key']); $v=wc_get_product((int)$vm['local_id']); $ids=[];
             foreach ($row['images'] as $url) { $ids[]=$this->importImage($url,$p->get_id()); }
-            $v->set_image_id($ids[0]??0); $v->update_meta_data('_wd29_variant_image_ids',$ids); $v->save();
+            Gallery::apply($v,$ids,!empty($this->config()['sync_gallery_removals'])); $v->save();
         }
         return $p->get_id();
     }
@@ -441,6 +466,48 @@ final class WooAdapter
             'tax' => $o->get_total_tax(), 'shipping_net' => $o->get_shipping_total(), 'shipping_tax' => $o->get_shipping_tax(),
             'discount' => $o->get_discount_total(), 'billing' => $o->get_address('billing'), 'shipping' => $o->get_address('shipping'),
             'refunds'=>Refunds::export($o), 'custom_fields'=>CustomFields::export($o,'order'), 'items' => $items, 'created' => $o->get_date_created() ? $o->get_date_created()->date('c') : null];
+    }
+
+    /** Return a conflict-comparison snapshot only after checking hidden native mirror edits. */
+    public function orderConflictSnapshot(int $id): array
+    {
+        $data=$this->order($id); $o=wc_get_order($id);
+        if (strpos($data['key'],'ps:order:')!==0) { return $data; }
+        $snapshot=$o->get_meta('_wd29_bridge_snapshot');
+        if (!is_array($snapshot) || $snapshot['key']!==$data['key'] || !is_array($snapshot['items']??null)) { throw new \RuntimeException('Mirror snapshot missing; explicit order review required.'); }
+        $decimals=wc_get_price_decimals();
+        if ($o->get_currency()!==$snapshot['currency'] || $o->get_refunds() || $o->get_transaction_id()!=='' || $o->get_payment_method()!=='') { throw new \RuntimeException('Native mirror currency/payment/refund changed; explicit order review required.'); }
+        foreach (['total'=>'get_total','tax'=>'get_total_tax','shipping_net'=>'get_shipping_total','shipping_tax'=>'get_shipping_tax','discount'=>'get_discount_total'] as $field=>$getter) { OrderConflicts::assertMoney($o->$getter(),$snapshot[$field]??null,$decimals); }
+        OrderConflicts::assertAddress($o->get_address('billing'),$snapshot['billing']);
+        $expectedShipping=$snapshot['shipping']; unset($expectedShipping['email']); // Woo shipping addresses have no native email field.
+        OrderConflicts::assertAddress($o->get_address('shipping'),$expectedShipping);
+        $items=array_values($o->get_items());
+        if (count($items)!==count($snapshot['items'])) { throw new \RuntimeException('Native mirror line count changed; explicit order review required.'); }
+        foreach ($snapshot['items'] as $index=>$line) {
+            $item=$items[$index]; $expectedKey=isset($line['line_id'])?'source:'.$line['line_id']:'legacy:'.$index;
+            $storedKey=(string)$item->get_meta('_wd29_source_line');
+            if (($storedKey!=='' && $storedKey!==$expectedKey) || $item->get_name()!==$line['name'] || (int)$item->get_quantity()!==(int)$line['quantity']) { throw new \RuntimeException('Native mirror line identity or quantity changed; explicit order review required.'); }
+            $actualProduct=(int)($item->get_variation_id()?:$item->get_product_id());
+            $productMap=!empty($line['product'])?$this->engine->mapping($line['product']):null;
+            if (($line['product']!==null && (!$productMap || $actualProduct!==(int)$productMap['local_id'])) || ($line['product']===null && $actualProduct!==0)) { throw new \RuntimeException('Native mirror product link changed; explicit order review required.'); }
+            OrderConflicts::assertMoney($item->get_total(),$line['net'],$decimals);
+            OrderConflicts::assertMoney($item->get_total_tax(),$line['tax'],$decimals);
+            OrderConflicts::assertMoney($item->get_subtotal(),$line['net'],$decimals);
+            OrderConflicts::assertMoney($item->get_subtotal_tax(),$line['tax'],$decimals);
+        }
+        // Fees are generated only for the source discount; extra native fees cannot be ignored.
+        $lineNet=(float)$snapshot['shipping_net']; $lineTax=(float)$snapshot['shipping_tax'];
+        foreach ($snapshot['items'] as $line) { $lineNet+=(float)$line['net']; $lineTax+=(float)$line['tax']; }
+        $discountNet=$lineNet-((float)$snapshot['total']-(float)$snapshot['tax']);
+        $discountTax=$lineTax-(float)$snapshot['tax']; $fees=array_values($o->get_items('fee'));
+        $expectedFee=abs($lineNet+$lineTax-(float)$snapshot['total'])>0.02;
+        if (count($fees)!==($expectedFee?1:0) || $o->get_items('coupon')) { throw new \RuntimeException('Native mirror fees/coupons changed; explicit order review required.'); }
+        if ($expectedFee) { OrderConflicts::assertMoney($fees[0]->get_total(),-$discountNet,$decimals); OrderConflicts::assertMoney($fees[0]->get_total_tax(),-$discountTax,$decimals); }
+        $shipping=array_values($o->get_items('shipping'));
+        if (count($shipping)!==1) { throw new \RuntimeException('Native mirror shipping lines changed; explicit order review required.'); }
+        OrderConflicts::assertMoney($shipping[0]->get_total(),$snapshot['shipping_net'],$decimals);
+        OrderConflicts::assertMoney($shipping[0]->get_total_tax(),$snapshot['shipping_tax'],$decimals);
+        return $data;
     }
 
     public static function registerSourceStatuses(): void

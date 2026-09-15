@@ -68,8 +68,20 @@ final class CustomFields
     {
         if ($depth>6 || !isset($field['name'],$field['key'],$field['type'])) { throw new \RuntimeException('Invalid or excessively nested ACF schema.'); }
         self::safeKey($field['name'],$entity);
-        if (function_exists('acf_get_field_type') && !acf_get_field_type($field['type'])) { throw new \RuntimeException('ACF field type is not installed: '.$field['type'].'. Repeater support requires ACF PRO.'); }
-        if (in_array($field['type'],['group','repeater'],true)) {
+        if (function_exists('acf_get_field_type') && !acf_get_field_type($field['type'])) { throw new \RuntimeException('ACF field type is not installed: '.$field['type'].'. Repeater, gallery and flexible-content support require ACF PRO.'); }
+        if ($field['type']==='flexible_content') {
+            foreach (self::layouts($field) as $layout) {
+                $names=[];
+                foreach ($layout['sub_fields']??[] as $sub) {
+                    self::schema($sub,$entity,$depth+1);
+                    if (isset($names[$sub['name']])) { throw new \RuntimeException('Duplicate ACF layout subfield name.'); }
+                    $names[$sub['name']]=true;
+                }
+            }
+        } elseif ($field['type']==='taxonomy') {
+            if (!in_array($entity,['product','variation'],true)) { throw new \RuntimeException('ACF catalog taxonomy fields require product or variation scope.'); }
+            self::catalogTaxonomy($field);
+        } elseif (in_array($field['type'],['group','repeater'],true)) {
             if (empty($field['sub_fields']) || count($field['sub_fields'])>100) { throw new \RuntimeException('ACF group/repeater requires bounded local subfields.'); }
             $names=[];
             foreach ($field['sub_fields'] as $sub) {
@@ -86,6 +98,8 @@ final class CustomFields
     /** Normalize raw ACF local keys to portable names, or portable names to local keys. */
     private static function acfValue(array $field,$value,bool $toLocal=false,array $resolvers=[])
     {
+        if ($field['type']==='flexible_content') { return self::flexibleValue($field,$value,$toLocal,$resolvers); }
+        if ($field['type']==='taxonomy') { return self::taxonomyValue($field,$value,$toLocal); }
         if ($field['type']==='repeater') {
             if ($value===false || $value===null || $value==='') { return []; }
             if (!is_array($value) || array_values($value)!==$value) { throw new \RuntimeException('ACF repeater must contain a list of rows.'); }
@@ -120,6 +134,82 @@ final class CustomFields
             }
         }
         return $value;
+    }
+    private static function layouts(array $field): array
+    {
+        if (empty($field['layouts']) || !is_array($field['layouts']) || count($field['layouts'])>100) { throw new \RuntimeException('ACF flexible content requires bounded explicit local layouts.'); }
+        $layouts=[];
+        foreach ($field['layouts'] as $layout) {
+            if (!is_array($layout) || !is_string($layout['name']??null) || !preg_match('/^[A-Za-z_][A-Za-z0-9_-]{0,127}$/D',$layout['name']) || !is_array($layout['sub_fields']??[]) || count($layout['sub_fields']??[])>100 || isset($layouts[$layout['name']])) { throw new \RuntimeException('Invalid or duplicate ACF flexible-content layout.'); }
+            $layouts[$layout['name']]=$layout;
+        }
+        return $layouts;
+    }
+    private static function flexibleValue(array $field,$value,bool $toLocal,array $resolvers): array
+    {
+        $layouts=self::layouts($field);
+        if (in_array($value,[false,null,''],true)) { $value=[]; }
+        if (!is_array($value) || array_values($value)!==$value || count($value)>500) { throw new \RuntimeException('ACF flexible content requires a bounded list of layout rows.'); }
+        if (count($value)<(int)($field['min']??0) || (!empty($field['max']) && count($value)>(int)$field['max'])) { throw new \RuntimeException('ACF flexible-content row count is outside local limits.'); }
+        $counts=[]; $out=[];
+        foreach ($value as $row) {
+            if (!is_array($row) || !is_string($row['acf_fc_layout']??null) || !isset($layouts[$row['acf_fc_layout']])) { throw new \RuntimeException('Unknown or missing ACF flexible-content layout.'); }
+            $name=$row['acf_fc_layout']; $layout=$layouts[$name];
+            $counts[$name]=($counts[$name]??0)+1;
+            unset($row['acf_fc_layout']);
+            $group=['type'=>'group','sub_fields'=>$layout['sub_fields']??[]];
+            $out[]=array_merge(['acf_fc_layout'=>$name],self::acfValue($group,$row,$toLocal,$resolvers));
+        }
+        foreach ($layouts as $name=>$layout) {
+            $count=$counts[$name]??0;
+            if ($count<(int)($layout['min']??0) || (!empty($layout['max']) && $count>(int)$layout['max'])) { throw new \RuntimeException('ACF layout row count is outside local limits: '.$name.'.'); }
+        }
+        return $out;
+    }
+    private static function catalogTaxonomy(array $field): string
+    {
+        if (!empty($field['save_terms']) || !empty($field['load_terms'])) { throw new \RuntimeException('ACF taxonomy mappings require save_terms/load_terms disabled; native product taxonomy assignments synchronize through the catalog adapter.'); }
+        if (!in_array($field['field_type']??'checkbox',['checkbox','multi_select','select','radio'],true)) { throw new \RuntimeException('Unsupported ACF taxonomy selection type.'); }
+        $taxonomy=$field['taxonomy']??null;
+        if (!is_string($taxonomy) || (!in_array($taxonomy,['product_cat','product_tag','product_brand'],true) && !preg_match('/^pa_[a-z0-9_\-]{1,28}$/D',$taxonomy)) || !taxonomy_exists($taxonomy)) { throw new \RuntimeException('ACF taxonomy fields support registered WooCommerce catalog taxonomies only.'); }
+        $definition=get_taxonomy($taxonomy);
+        if (!$definition || !in_array('product',$definition->object_type,true)) { throw new \RuntimeException('ACF taxonomy must belong to WooCommerce products.'); }
+        return $taxonomy;
+    }
+    private static function taxonomyValue(array $field,$value,bool $toLocal)
+    {
+        $taxonomy=self::catalogTaxonomy($field);
+        $multiple=in_array($field['field_type']??'checkbox',['checkbox','multi_select'],true);
+        if (in_array($value,[false,null,'',0,'0'],true)) { return $multiple?[]:null; }
+        if ($multiple && (!is_array($value) || array_values($value)!==$value)) { throw new \RuntimeException('ACF taxonomy field requires a list of term identities.'); }
+        $out=[];
+        foreach ($multiple?$value:[$value] as $reference) {
+            if ($toLocal) {
+                if (!is_array($reference) || ($reference['taxonomy']??null)!==$taxonomy || !is_array($reference['path']??null) || !$reference['path'] || count($reference['path'])>32 || array_values($reference['path'])!==$reference['path'] || array_diff(array_keys($reference),['taxonomy','path'])) { throw new \RuntimeException('ACF term identity requires its configured taxonomy and a bounded ancestor-name path.'); }
+                $parent=0;
+                foreach ($reference['path'] as $name) {
+                    if (!is_string($name) || $name==='' || strlen($name)>800) { throw new \RuntimeException('Invalid ACF term path segment.'); }
+                    $terms=get_terms(['taxonomy'=>$taxonomy,'hide_empty'=>false,'name'=>$name,'parent'=>$parent]);
+                    if (is_wp_error($terms)) { throw new \RuntimeException('ACF catalog terms could not be resolved.'); }
+                    $matches=array_values(array_filter($terms,static function($term) use ($name,$parent) { return $term->name===$name && (int)$term->parent===$parent; }));
+                    if (count($matches)!==1) { throw new \RuntimeException('ACF catalog term path is missing or ambiguous; synchronize or create the term explicitly first.'); }
+                    $parent=(int)$matches[0]->term_id;
+                }
+                $out[]=$parent;
+            } else {
+                if ((!is_int($reference) && !(is_string($reference) && ctype_digit($reference))) || (int)$reference<1) { throw new \RuntimeException('ACF taxonomy value must reference an existing catalog term.'); }
+                $term=get_term((int)$reference,$taxonomy); $path=[]; $seen=[];
+                while ($term && !is_wp_error($term)) {
+                    if (isset($seen[$term->term_id]) || count($path)>=32 || $term->taxonomy!==$taxonomy) { throw new \RuntimeException('Invalid or excessively deep ACF catalog term ancestry.'); }
+                    $seen[$term->term_id]=true; array_unshift($path,$term->name);
+                    if (!$term->parent) { break; }
+                    $term=get_term((int)$term->parent,$taxonomy);
+                }
+                if (!$term || is_wp_error($term) || !$path) { throw new \RuntimeException('ACF catalog term or ancestor is missing.'); }
+                $out[]=['taxonomy'=>$taxonomy,'path'=>$path];
+            }
+        }
+        return $multiple?$out:$out[0];
     }
     private static function referenceValue(array $field,$value,bool $toLocal,array $resolvers)
     {

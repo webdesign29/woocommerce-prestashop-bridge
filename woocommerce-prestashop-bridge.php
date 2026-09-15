@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.2.0
+ * Version: 0.2.1
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -13,9 +13,11 @@
 defined('ABSPATH') || exit;
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/Engine.php';
+require_once __DIR__ . '/includes/OrderConflicts.php';
 require_once __DIR__ . '/includes/CustomerAccounts.php';
 require_once __DIR__ . '/includes/Refunds.php';
 require_once __DIR__ . '/includes/Suppliers.php';
+require_once __DIR__ . '/includes/Gallery.php';
 require_once __DIR__ . '/includes/DiagnosticsAdmin.php';
 require_once __DIR__ . '/includes/WooAdapter.php';
 require_once __DIR__ . '/includes/CustomFields.php';
@@ -41,7 +43,7 @@ register_activation_hook(__FILE__, function () {
 register_deactivation_hook(__FILE__, function () { wp_clear_scheduled_hook('wd29_bridge_tick'); });
 add_filter('cron_schedules', function ($schedules) { $schedules['wd29_minute'] = ['interval' => 60, 'display' => 'Every minute (WD29 bridge)']; return $schedules; });
 add_action('plugins_loaded', function () {
-    if (get_option('wd29_bridge_schema') !== '5') { wd29_bridge()->install(); update_option('wd29_bridge_schema','5',false); }
+    if (get_option('wd29_bridge_schema') !== '6') { wd29_bridge()->install(); update_option('wd29_bridge_schema','6',false); }
 }, 30);
 add_action('wd29_bridge_tick', function () { if (function_exists('wc_get_product')) { wd29_bridge()->tick(); } });
 function wd29_bridge_capture_later(string $kind, int $id): void {
@@ -105,8 +107,10 @@ function wd29_bridge_admin(): void {
                 $policy = sanitize_key($_POST['conflict_policy'] ?? 'review');
                 if (!in_array($policy, ['review','woo','ps'], true)) { throw new \RuntimeException('Invalid conflict policy.'); }
                 $engine->validateSettings($mode, $peer, $secret !== '' ? $secret : ($config['secret'] ?? ''));
-                update_option('wd29_bridge_config', ['mode' => $mode, 'peer' => $peer, 'secret' => $secret !== '' ? $secret : ($config['secret'] ?? ''), 'conflict_policy' => $policy, 'native_customers'=>!empty($_POST['native_customers'])], false);
+                update_option('wd29_bridge_config', ['mode' => $mode, 'peer' => $peer, 'secret' => $secret !== '' ? $secret : ($config['secret'] ?? ''), 'conflict_policy' => $policy, 'native_customers'=>!empty($_POST['native_customers']), 'sync_gallery_removals'=>!empty($_POST['sync_gallery_removals'])], false);
                 $message = 'Settings saved.';
+            } elseif ($action === 'restore_gallery') {
+                $engine->adapter->restoreGallery(trim(wp_unslash($_POST['gallery_record']??''))); $message='Detached gallery images restored and product captured.';
             } elseif ($action === 'save_field_rows') {
                 update_option('wd29_bridge_custom_fields', \WD29\Bridge\CustomFieldsAdmin::submitted(wp_unslash($_POST['field_rows']??[])),false);
                 $message='Custom field mappings saved.';
@@ -127,7 +131,8 @@ function wd29_bridge_admin(): void {
             } elseif ($action === 'normalize_stock') { $message=wp_json_encode($engine->adapter->normalizeUnknownVariantStock(max(0,(int)($_POST['offset']??0)))); } elseif ($action === 'health') { $message = wp_json_encode($engine->peer(['op' => 'health'])); }
             elseif ($action === 'tick') { $engine->tick(); $message = 'Queue processed; inspect the result below.'; }
             elseif ($action === 'retry') { $engine->retry(); $message = 'Failed events queued again.'; }
-            elseif ($action === 'resolve_catalog') { $engine->retryCatalogConflicts(); $message = 'Catalog conflicts queued with the selected priority.'; }
+            elseif ($action === 'resolve_order_upgrades') { $message = 'Equivalent order updates queued: ' . $engine->retryEquivalentOrderConflicts(); }
+                elseif ($action === 'resolve_catalog') { $engine->retryCatalogConflicts(); $message = 'Catalog conflicts queued with the selected priority.'; }
             elseif (in_array($action, ['seed_products','seed_orders','seed_customers'], true)) {
                 $kind = $action === 'seed_customers' ? 'customer' : ($action === 'seed_orders' ? 'order' : 'product');
                 $offset = max(0, (int) ($_POST['offset'] ?? 0));
@@ -152,10 +157,12 @@ function wd29_bridge_admin(): void {
     echo '</select></label> Use the same policy on both stores.</p>';
     echo '<p><label>Shared secret <input type="password" name="secret" autocomplete="new-password" value=""></label> Leave blank to keep the configured secret.</p>';
     echo '<p><label><input type="checkbox" name="native_customers" value="1" '.checked(!empty($config['native_customers']),true,false).'> Create native customer accounts for registered source customers (independent passwords; no email merging)</label></p>';
+    echo '<p><label><input type="checkbox" name="sync_gallery_removals" value="1" '.checked(!empty($config['sync_gallery_removals']),true,false).'> Detach imported gallery images removed on the peer (keep original files and manual images)</label></p>';
     echo '<button class="button button-primary" name="bridge_action" value="save">Save settings</button></form><hr><form method="post">';
     wp_nonce_field('wd29_bridge_admin');
+    echo '<p><label>Mapped product or variation key <input name="gallery_record" placeholder="ps:product:123"></label> <button class="button" name="bridge_action" value="restore_gallery">Restore detached gallery images</button></p><p>Reattaches retained imports for this record; the product is captured for synchronization.</p>';
     echo '<p><label>Batch offset <input type="number" min="0" name="offset" value="0"></label> Batches contain up to 10 records per store.</p>';
-    foreach (['health' => 'Test connection', 'seed_products' => 'Capture both catalogs', 'seed_orders' => 'Capture both order histories', 'seed_customers' => 'Capture customer contacts', 'tick' => 'Process queue', 'retry' => 'Retry failures', 'resolve_catalog'=>'Retry catalog conflicts with selected priority', 'normalize_stock'=>'Set unknown Woo variation quantities to zero'] as $value => $label) {
+    foreach (['health' => 'Test connection', 'seed_products' => 'Capture both catalogs', 'seed_orders' => 'Capture both order histories', 'seed_customers' => 'Capture customer contacts', 'tick' => 'Process queue', 'retry' => 'Retry failures', 'resolve_order_upgrades'=>'Retry equivalent order updates', 'resolve_catalog'=>'Retry catalog conflicts with selected priority', 'normalize_stock'=>'Set unknown Woo variation quantities to zero'] as $value => $label) {
         echo '<button class="button" name="bridge_action" value="' . esc_attr($value) . '">' . esc_html($label) . '</button> ';
     }
     echo '</form>';

@@ -35,6 +35,10 @@ acf_add_local_field_group(['key'=>'group_wd29_identity_fixture','title'=>'Identi
  ['key'=>'field_wd29_postobject','name'=>'fixture_postobject','type'=>'post_object','label'=>'Related single','post_type'=>['product'],'return_format'=>'id'],
  ['key'=>'field_wd29_gallery','name'=>'fixture_gallery','type'=>'gallery','label'=>'Gallery','return_format'=>'id'],
 ]]);
+acf_add_local_field_group(['key'=>'group_wd29_taxonomy_fixture','title'=>'Taxonomy fixture','fields'=>[
+ ['key'=>'field_wd29_categories','name'=>'fixture_categories','type'=>'taxonomy','label'=>'Categories','taxonomy'=>'product_cat','field_type'=>'checkbox','return_format'=>'id','save_terms'=>0,'load_terms'=>0],
+ ['key'=>'field_wd29_category','name'=>'fixture_category','type'=>'taxonomy','label'=>'Category','taxonomy'=>'product_cat','field_type'=>'select','return_format'=>'id','save_terms'=>0,'load_terms'=>0],
+]]);
 $old=get_option('wd29_bridge_custom_fields',[]); $oldHpos=get_option('woocommerce_custom_orders_table_enabled','no'); $userId=0;
 try {
  $defaults=CustomFields::rules([['id'=>'legacy','source'=>'meta','key'=>'fixture_legacy']]);
@@ -135,6 +139,67 @@ try {
   expect(CustomFields::export($p,null,$resolvers)['gallery']['value']===['https://woo.example.test/wordpress/wp-content/uploads/wd29-synthetic.png'],'Native gallery roundtrip failed');
   echo "PASS: native ACF gallery storage\n";
  } else { echo "SKIP: native ACF gallery storage requires ACF PRO; URL translation tested\n"; }
+ $prefix='WD29 taxonomy '.bin2hex(random_bytes(5));
+ $parentA=wp_insert_term($prefix.' A','product_cat'); $parentB=wp_insert_term($prefix.' B','product_cat');
+ $childA=wp_insert_term('Identical child','product_cat',['parent'=>$parentA['term_id']]);
+ $childB=wp_insert_term('Identical child','product_cat',['parent'=>$parentB['term_id']]);
+ foreach ([$parentA,$parentB,$childA,$childB] as $termResult) { if (is_wp_error($termResult)) { throw new RuntimeException($termResult->get_error_message()); } }
+ $termA=['taxonomy'=>'product_cat','path'=>[$prefix.' A','Identical child']];
+ $termB=['taxonomy'=>'product_cat','path'=>[$prefix.' B','Identical child']];
+ $taxRules=[['id'=>'categories','source'=>'acf','key'=>'field_wd29_categories'],['id'=>'category','source'=>'acf','key'=>'field_wd29_category']];
+ update_option('wd29_bridge_custom_fields',$taxRules);
+ $taxPayload=['categories'=>['present'=>true,'value'=>[$termA,$termB]],'category'=>['present'=>true,'value'=>$termB]];
+ CustomFields::apply($p,$taxPayload); $p->save();
+ expect(CustomFields::export($p)===$taxPayload,'Catalog taxonomy ancestor paths failed native ACF roundtrip');
+ expect((int)get_field('field_wd29_category',$p->get_id(),false)===(int)$childB['term_id'],'Taxonomy resolved same-name child under wrong ancestor');
+ $count=wp_count_terms(['taxonomy'=>'product_cat','hide_empty'=>false]);
+ rejected(static function() use ($p,$prefix) { CustomFields::apply($p,['category'=>['present'=>true,'value'=>['taxonomy'=>'product_cat','path'=>[$prefix.' missing']]]]); },'Missing taxonomy term was accepted');
+ expect(wp_count_terms(['taxonomy'=>'product_cat','hide_empty'=>false])===$count,'Missing taxonomy path created a term');
+ rejected(static function() use ($p) { CustomFields::apply($p,['category'=>['present'=>true,'value'=>['taxonomy'=>'category','path'=>['Uncategorized']]]]); },'Wrong taxonomy identity accepted');
+ rejected(static function() use ($method) { $method->invoke(null,['type'=>'taxonomy','taxonomy'=>'category','field_type'=>'select'],1,false); },'Noncatalog taxonomy schema accepted');
+ CustomFields::apply($p,['category'=>['present'=>false,'value'=>null]]); $p->save();
+ expect(!metadata_exists('post',$p->get_id(),'fixture_category') && !metadata_exists('post',$p->get_id(),'_fixture_category'),'Taxonomy tombstone failed');
+ rejected(static function() use ($method,$childA) { $method->invoke(null,['type'=>'taxonomy','taxonomy'=>'product_cat','save_terms'=>1],[$childA['term_id']],false); },'ACF taxonomy native-assignment side effects accepted');
+ register_taxonomy('pa_wd29_fixture',['product'],['hierarchical'=>false]);
+ foreach (['product_tag','product_brand','pa_wd29_fixture'] as $fixtureTaxonomy) {
+  if (!taxonomy_exists($fixtureTaxonomy)) { continue; }
+  $term=wp_insert_term($prefix.' term',$fixtureTaxonomy);
+  if (is_wp_error($term)) { throw new RuntimeException($term->get_error_message()); }
+  $field=['type'=>'taxonomy','taxonomy'=>$fixtureTaxonomy,'field_type'=>'select'];
+  $portableTerm=$method->invoke(null,$field,(int)$term['term_id'],false);
+  expect($portableTerm===['taxonomy'=>$fixtureTaxonomy,'path'=>[$prefix.' term']],'Catalog taxonomy name path export failed');
+  expect($method->invoke(null,$field,$portableTerm,true)===(int)$term['term_id'],'Existing catalog taxonomy term resolution failed');
+  wp_delete_term($term['term_id'],$fixtureTaxonomy);
+ }
+ $flex=['key'=>'field_wd29_flexible','name'=>'fixture_flexible','type'=>'flexible_content','label'=>'Flexible','layouts'=>[
+  'layout_fixture_card'=>['key'=>'layout_fixture_card','name'=>'card','label'=>'Card','display'=>'block','max'=>1,'sub_fields'=>[
+   ['key'=>'field_card_caption','name'=>'caption','type'=>'text','label'=>'Caption'],
+   ['key'=>'field_card_related','name'=>'related','type'=>'relationship','label'=>'Related'],
+   ['key'=>'field_card_taxonomy','name'=>'category','type'=>'taxonomy','label'=>'Category','taxonomy'=>'product_cat','field_type'=>'select'],
+   ['key'=>'field_card_image','name'=>'picture','type'=>'image','label'=>'Picture'],
+  ]],
+  'layout_fixture_empty'=>['key'=>'layout_fixture_empty','name'=>'spacer','label'=>'Spacer','display'=>'block','sub_fields'=>[]],
+ ]];
+ $flexWire=[['acf_fc_layout'=>'card','caption'=>'Details','related'=>[$key],'category'=>$termA,'picture'=>'https://woo.example.test/wordpress/wp-content/uploads/wd29-synthetic.png'],['acf_fc_layout'=>'spacer']];
+ $flexLocal=$method->invoke(null,$flex,$flexWire,true,$resolvers);
+ expect($flexLocal[0]['acf_fc_layout']==='card' && $flexLocal[0]['field_card_related']===[$linked->get_id()] && $flexLocal[0]['field_card_taxonomy']===(int)$childA['term_id'],'Flexible content failed local layout/identity translation');
+ expect($method->invoke(null,$flex,$flexLocal,false,$resolvers)===$flexWire,'Flexible-content portable roundtrip failed');
+ rejected(static function() use ($method,$flex) { $method->invoke(null,$flex,[['acf_fc_layout'=>'unknown']],true); },'Unknown flexible-content layout accepted');
+ rejected(static function() use ($method,$flex,$flexWire,$resolvers) { $bad=$flexWire; unset($bad[0]['caption']); $method->invoke(null,$flex,$bad,true,$resolvers); },'Missing flexible layout subfield accepted');
+ rejected(static function() use ($method,$flex,$flexWire,$resolvers) { $method->invoke(null,$flex,[$flexWire[0],$flexWire[0]],true,$resolvers); },'Flexible layout maximum ignored');
+ $required=$flex; $required['min']=1;
+ rejected(static function() use ($method,$required) { $method->invoke(null,$required,[],true); },'Flexible content minimum ignored');
+ if (acf_get_field_type('flexible_content')) {
+  acf_add_local_field_group(['key'=>'group_wd29_flexible_fixture','title'=>'Flexible fixture','fields'=>[$flex]]);
+  update_option('wd29_bridge_custom_fields',[['id'=>'flexible','source'=>'acf','key'=>'field_wd29_flexible']]);
+  CustomFields::apply($p,['flexible'=>['present'=>true,'value'=>$flexWire]],null,$resolvers); $p->save();
+  expect(CustomFields::export($p,null,$resolvers)['flexible']['value']===$flexWire,'Native flexible-content roundtrip failed');
+  CustomFields::apply($p,['flexible'=>['present'=>false,'value'=>null]],null,$resolvers); $p->save();
+  expect(!metadata_exists('post',$p->get_id(),'fixture_flexible_0_caption'),'Flexible-content tombstone left child');
+  echo "PASS: native ACF flexible-content storage and deletion\n";
+ } else { echo "SKIP: native ACF flexible-content storage requires ACF PRO; explicit layouts and nested identities tested\n"; }
+ foreach ([$childA,$childB,$parentA,$parentB] as $termResult) { wp_delete_term($termResult['term_id'],'product_cat'); }
+ echo "PASS: native ACF taxonomy name-path roundtrip, same-name child disambiguation, no implicit term creation; flexible layout validation and nested identity translation\n";
  remove_filter('wp_get_attachment_url',$filter,10);
  wp_delete_attachment($imageId,true);
  echo "PASS: ACF image URL and canonical product identity roundtrips; unsafe hosts/unresolved IDs/noncatalog references rejected\n";
