@@ -83,3 +83,8 @@ expect(rest_do_request($request)->get_status()===401,'Invalid REST signature was
 if (getenv('WD29_FIXTURE_OUTPUT')) { file_put_contents(getenv('WD29_FIXTURE_OUTPUT'),Protocol::encode($e->adapter->product($p->get_id()))); }
 echo "PASS: native WooCommerce product, variation, initial stock, local delta, replay, concurrent delta, unknown quantity, conflict, order mirror and cancellation\n";
 update_option('wd29_bridge_config', ['mode'=>'disabled']);
+
+$audited = $e->catalogAudit();
+expect(count($audited)>0, "Catalog audit omitted captured products");
+expect(strpos(json_encode($audited), "customer@example.test") === false, "Catalog audit leaked order data");
+echo "PASS: catalog audit includes products without customer order data\n";
