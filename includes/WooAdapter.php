@@ -7,6 +7,11 @@ final class WooAdapter
     public function site(): string { return 'woo'; }
     public function prefix(): string { global $wpdb; return $wpdb->prefix; }
     public function config(): array { return (array) get_option('wd29_bridge_config', ['mode' => 'disabled']); }
+    public function workerStatus(?string $state=null): array
+    {
+        if ($state!==null) { update_option('wd29_bridge_worker',['state'=>$state,'at'=>gmdate('c')],false); }
+        return (array)get_option('wd29_bridge_worker',[]);
+    }
     public function notice(string $text): void { update_option('wd29_bridge_notice', sanitize_text_field($text), false); }
     public function scanOffset(string $kind): int { $value=(array)get_option('wd29_bridge_scan',[]); return (int)($value[$kind]??0); }
     public function saveScanOffset(string $kind,int $offset): void { $value=(array)get_option('wd29_bridge_scan',[]); $value[$kind]=$offset; update_option('wd29_bridge_scan',$value,false); }
