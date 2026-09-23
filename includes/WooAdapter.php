@@ -41,6 +41,13 @@ final class WooAdapter
 
     public function prefix(): string { global $wpdb; return $wpdb->prefix; }
     public function config(): array { return (array) get_option('wd29_bridge_config', ['mode' => 'disabled']); }
+    public function licenceState(?array $state=null): array
+    {
+        if ($state!==null) { update_option('wd29_bridge_licence',$state,false); return $state; }
+        return (array)get_option('wd29_bridge_licence',[]);
+    }
+    public function siteUrl(): string { return home_url('/'); }
+    public function pluginVersion(): string { return defined('WD29_BRIDGE_VERSION') ? WD29_BRIDGE_VERSION : '0'; }
     public function workerStatus(?string $state=null): array
     {
         if ($state!==null) { update_option('wd29_bridge_worker',['state'=>$state,'at'=>gmdate('c')],false); }

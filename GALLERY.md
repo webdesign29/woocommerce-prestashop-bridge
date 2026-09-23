@@ -1,6 +1,6 @@
 # Recoverable gallery synchronization
 
-The settings panel provides **Restore detached gallery images**. Enter a mapped product or variation key from the synchronization journal. Restoration uses the worker lock and a database transaction, saves the recovered associations, and captures the parent product for synchronization. No attachment or image file is deleted.
+The settings panel provides **Rattacher les images détachées** (Restore detached gallery images before 0.4). Enter a mapped product or variation key from the synchronization journal. Restoration uses the worker lock and a database transaction, saves the recovered associations, and captures the parent product for synchronization. No attachment or image file is deleted.
 
 Option `sync_gallery_removals` defaults to false. The helper never deletes attachments. With removals disabled, incoming images are added and previous images remain. With it enabled, only images tagged with `_wd29_bridge_source` are detached when absent from the incoming image set. Manually uploaded, untagged images remain.
 

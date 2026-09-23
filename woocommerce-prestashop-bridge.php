@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.2.2
+ * Version: 0.4.0
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -11,7 +11,11 @@
  * Text Domain: wd29-bridge
  */
 defined('ABSPATH') || exit;
+const WD29_BRIDGE_VERSION = '0.4.0';
 require_once __DIR__ . '/includes/Protocol.php';
+require_once __DIR__ . '/includes/Licence.php';
+require_once __DIR__ . '/includes/LicenceAdmin.php';
+require_once __DIR__ . '/includes/Updater.php';
 require_once __DIR__ . '/includes/Engine.php';
 require_once __DIR__ . '/includes/AdminDesign.php';
 require_once __DIR__ . '/includes/OrderConflicts.php';
@@ -34,9 +38,23 @@ function wd29_bridge(): \WD29\Bridge\Engine {
     return $engine;
 }
 add_action('init', ['\WD29\Bridge\WooAdapter','registerSourceStatuses']);
+(new \WD29\Bridge\Updater('wd29_bridge', __FILE__))->register();
+// One admin notice while live mode is paused or the grace period is running (reads one option).
+add_filter('plugin_action_links_' . plugin_basename(__FILE__), function ($links) {
+    array_unshift($links, '<a href="' . esc_url(admin_url('admin.php?page=wd29-bridge')) . '">Réglages</a>');
+    return $links;
+});
+add_action('admin_notices', function () {
+    if (!current_user_can('manage_options') || (($_GET['page'] ?? '') === 'wd29-bridge')) { return; }
+    $engine = wd29_bridge();
+    if (($engine->config()['mode'] ?? 'disabled') === 'disabled') { return; }
+    $s = $engine->licence()->summary();
+    if ($s['tone'] === 'ok') { return; }
+    echo '<div class="notice notice-' . ($s['live'] ? 'warning' : 'error') . '"><p><strong>Inklura Sync : ' . esc_html($s['label']) . '.</strong> ' . esc_html($s['text']) . ' <a href="' . esc_url(admin_url('admin.php?page=wd29-bridge#wd-licence')) . '">Licence</a></p></div>';
+});
 add_filter('wc_order_statuses', ['\WD29\Bridge\WooAdapter','statusList']);
 register_activation_hook(__FILE__, function () {
-    if (!class_exists('WooCommerce') || !extension_loaded('curl')) { wp_die('WooCommerce and PHP cURL are required.'); }
+    if (!class_exists('WooCommerce') || !extension_loaded('curl')) { wp_die('WooCommerce et l\'extension PHP cURL sont nécessaires.'); }
     wd29_bridge()->install();
     add_option('wd29_bridge_config', ['mode' => 'disabled', 'peer' => '', 'secret' => ''], '', false);
     if (!wp_next_scheduled('wd29_bridge_tick')) { wp_schedule_event(time() + 60, 'wd29_minute', 'wd29_bridge_tick'); }
@@ -97,106 +115,112 @@ function wd29_bridge_admin(): void {
         check_admin_referer('wd29_bridge_admin');
         try {
             $action = sanitize_key($_POST['bridge_action'] ?? '');
-            if ($action === 'save') {
+            $licenceMessage = \WD29\Bridge\LicenceAdmin::handle($engine, $action, (string) wp_unslash($_POST['licence_key'] ?? ''));
+            if ($licenceMessage !== null) { $message = $licenceMessage; \WD29\Bridge\Updater::forget(); }
+            elseif ($action === 'save') {
                 $config = $engine->config();
                 $mode = sanitize_key($_POST['mode'] ?? 'disabled');
-                if (!in_array($mode, ['disabled', 'audit', 'live'], true)) { throw new \RuntimeException('Invalid mode.'); }
+                if (!in_array($mode, ['disabled', 'audit', 'live'], true)) { throw new \RuntimeException('Mode invalide.'); }
                 $peer = trim(wp_unslash($_POST['peer'] ?? ''));
                 if ($peer !== '') { \WD29\Bridge\Protocol::publicEndpoint($peer); }
                 $secret = trim(wp_unslash($_POST['secret'] ?? ''));
-                if ($secret !== '' && strlen($secret) < 32) { throw new \RuntimeException('Secret must contain at least 32 characters.'); }
+                if ($secret !== '' && strlen($secret) < 32) { throw new \RuntimeException('Le secret partagé doit compter au moins 32 caractères.'); }
                 $policy = sanitize_key($_POST['conflict_policy'] ?? 'review');
-                if (!in_array($policy, ['review','woo','ps'], true)) { throw new \RuntimeException('Invalid conflict policy.'); }
+                if (!in_array($policy, ['review','woo','ps'], true)) { throw new \RuntimeException('Règle de conflit invalide.'); }
                 $engine->validateSettings($mode, $peer, $secret !== '' ? $secret : ($config['secret'] ?? ''));
                 update_option('wd29_bridge_config', ['mode' => $mode, 'peer' => $peer, 'secret' => $secret !== '' ? $secret : ($config['secret'] ?? ''), 'conflict_policy' => $policy, 'native_customers'=>!empty($_POST['native_customers']), 'sync_gallery_removals'=>!empty($_POST['sync_gallery_removals'])], false);
-                $message = 'Settings saved.';
+                $message = 'Réglages enregistrés.';
             } elseif ($action === 'restore_gallery') {
-                $engine->adapter->restoreGallery(trim(wp_unslash($_POST['gallery_record']??''))); $message='Detached gallery images restored and product captured.';
+                $engine->adapter->restoreGallery(trim(wp_unslash($_POST['gallery_record']??''))); $message='Images de galerie rattachées de nouveau ; produit capturé.';
             } elseif ($action === 'save_field_rows') {
                 update_option('wd29_bridge_custom_fields', \WD29\Bridge\CustomFieldsAdmin::submitted(wp_unslash($_POST['field_rows']??[])),false);
-                $message='Custom field mappings saved.';
+                $message='Correspondances des champs personnalisés enregistrées.';
             } elseif ($action === 'save_custom_fields') {
                 $rules=json_decode(wp_unslash($_POST['custom_fields']??'[]'),true,32,JSON_THROW_ON_ERROR);
                 update_option('wd29_bridge_custom_fields', \WD29\Bridge\CustomFields::rules($rules),false);
-                $message='Custom field allowlist saved. Capture catalogs to synchronize selected fields.';
+                $message='Liste des champs enregistrée. Capturez les catalogues pour synchroniser les champs choisis.';
             } elseif ($action === 'save_statuses') {
                 $mapping=[]; $submitted=wp_unslash($_POST['status_mapping']??[]);
-                if (!is_array($submitted)) { throw new \RuntimeException('Invalid status mappings.'); }
+                if (!is_array($submitted)) { throw new \RuntimeException('Correspondances de statuts invalides.'); }
                 foreach ((array)get_option('wd29_bridge_source_statuses',[]) as $key=>$label) {
                     $target=(string)($submitted[$key]??$key);
-                    if ($target!==$key && !in_array($target,['pending','on-hold','processing','completed','cancelled','refunded','failed'],true)) { throw new \RuntimeException('Invalid destination status.'); }
+                    if ($target!==$key && !in_array($target,['pending','on-hold','processing','completed','cancelled','refunded','failed'],true)) { throw new \RuntimeException('Statut de destination invalide.'); }
                     $mapping[$key]=$target;
                 }
                 update_option('wd29_bridge_status_mapping',$mapping,false);
-                $message='Status mappings saved; existing mirrors updated: '.$engine->adapter->applyStatusMappings();
+                $message='Correspondances de statuts enregistrées ; miroirs mis à jour : '.$engine->adapter->applyStatusMappings();
             } elseif ($action === 'normalize_stock') { $message=wp_json_encode($engine->adapter->normalizeUnknownVariantStock(max(0,(int)($_POST['offset']??0)))); } elseif ($action === 'health') { $message = wp_json_encode($engine->peer(['op' => 'health'])); }
-            elseif ($action === 'tick') { $engine->tick(); $message = 'Queue processed; inspect the result below.'; }
-            elseif ($action === 'retry') { $engine->retry(); $message = 'Failed events queued again.'; }
-            elseif ($action === 'resolve_order_upgrades') { $message = 'Equivalent order updates queued: ' . $engine->retryEquivalentOrderConflicts(); }
-                elseif ($action === 'resolve_catalog') { $engine->retryCatalogConflicts(); $message = 'Catalog conflicts queued with the selected priority.'; }
+            elseif ($action === 'tick') { $engine->tick(); $message = 'File traitée : consultez le résultat ci-dessous.'; }
+            elseif ($action === 'retry') { $engine->retry(); $message = 'Événements en échec remis en file.'; }
+            elseif ($action === 'resolve_order_upgrades') { $message = 'Mises à jour de commandes équivalentes remises en file : ' . $engine->retryEquivalentOrderConflicts(); }
+                elseif ($action === 'resolve_catalog') { $engine->retryCatalogConflicts(); $message = 'Conflits de catalogue remis en file avec la priorité choisie.'; }
             elseif (in_array($action, ['seed_products','seed_orders','seed_customers'], true)) {
                 $kind = $action === 'seed_customers' ? 'customer' : ($action === 'seed_orders' ? 'order' : 'product');
                 $offset = max(0, (int) ($_POST['offset'] ?? 0));
                 $count = $engine->seed($kind, $offset);
                 $peer = $engine->peer(['op' => 'seed', 'kind' => $kind, 'offset' => $offset]);
-                $message = 'Batch captured: local ' . $count . ', peer ' . $peer['count'] . '. Next offset: ' . ($offset + 10);
+                $message = 'Lot capturé : ' . $count . ' ici, ' . $peer['count'] . ' chez le partenaire. Offset suivant : ' . ($offset + 10);
             }
         } catch (\Throwable $e) { $message = $e->getMessage(); }
     }
     $config = $engine->config();
     ob_start();
-    echo '<div class="wrap"><h1>PrestaShop Bridge</h1><p>Direct connection. Audit mode queues incoming changes without applying them. Existing records keep their source identity; blank SKUs never match automatically.</p>';
+    echo '<div class="wrap"><h1>PrestaShop Bridge</h1><p>Connexion directe. En mode audit, les modifications reçues sont mises en file sans être appliquées. Chaque fiche garde son identité d\'origine ; une UGS vide ne sert jamais à rapprocher deux fiches.</p>';
     if ($message) { echo '<div class="notice notice-info"><p>' . esc_html($message) . '</p></div>'; }
-    echo '<p><strong>Local webhook:</strong> <code>' . esc_html(rest_url('wd29-bridge/v1/webhook')) . '</code></p>';
+    echo '<p><strong>Webhook de cette boutique :</strong> <code>' . esc_html(rest_url('wd29-bridge/v1/webhook')) . '</code></p>';
     echo '<form method="post">'; wp_nonce_field('wd29_bridge_admin');
     echo '<p><label>Mode <select name="mode">';
-    foreach (['disabled' => 'Disabled', 'audit' => 'Audit — no incoming writes', 'live' => 'Live synchronization'] as $value => $label) {
+    foreach (['disabled' => 'Arrêtée', 'audit' => 'Audit : réception sans écriture', 'live' => 'Synchronisation live'] as $value => $label) {
         echo '<option value="' . esc_attr($value) . '" ' . selected($config['mode'] ?? 'disabled', $value, false) . '>' . esc_html($label) . '</option>';
     }
-    echo '</select></label></p><p><label>PrestaShop webhook <input class="large-text" type="url" name="peer" value="' . esc_attr($config['peer'] ?? '') . '"></label></p>';
-    echo '<p><label>Simultaneous catalog edits <select name="conflict_policy">';
-    foreach (['review'=>'Pause for review','woo'=>'Prefer WooCommerce','ps'=>'Prefer PrestaShop'] as $value=>$label) { echo '<option value="'.esc_attr($value).'" '.selected($config['conflict_policy'] ?? 'review',$value,false).'>'.esc_html($label).'</option>'; }
-    echo '</select></label> Use the same policy on both stores.</p>';
-    echo '<p><label>Shared secret <input type="password" name="secret" autocomplete="new-password" value=""></label> Leave blank to keep the configured secret.</p>';
-    echo '<p><label><input type="checkbox" name="native_customers" value="1" '.checked(!empty($config['native_customers']),true,false).'> Create native customer accounts for registered source customers (independent passwords; no email merging)</label></p>';
-    echo '<p><label><input type="checkbox" name="sync_gallery_removals" value="1" '.checked(!empty($config['sync_gallery_removals']),true,false).'> Detach imported gallery images removed on the peer (keep original files and manual images)</label></p>';
-    echo '<button class="button button-primary" name="bridge_action" value="save">Save settings</button></form><hr><form method="post">';
+    echo '</select></label></p><p><label>Webhook PrestaShop <input class="large-text" type="url" name="peer" value="' . esc_attr($config['peer'] ?? '') . '"></label></p>';
+    echo '<p><label>Modifications simultanées du catalogue <select name="conflict_policy">';
+    foreach (['review'=>'Mettre en pause pour examen','woo'=>'Priorité à WooCommerce','ps'=>'Priorité à PrestaShop'] as $value=>$label) { echo '<option value="'.esc_attr($value).'" '.selected($config['conflict_policy'] ?? 'review',$value,false).'>'.esc_html($label).'</option>'; }
+    echo '</select></label> Choisissez la même règle sur les deux boutiques.</p>';
+    echo '<p><label>Secret partagé <input type="password" name="secret" autocomplete="new-password" value=""></label> Laissez vide pour conserver le secret enregistré.</p>';
+    echo '<p><label><input type="checkbox" name="native_customers" value="1" '.checked(!empty($config['native_customers']),true,false).'> Créer des comptes clients natifs pour les clients inscrits de l\'autre boutique (mots de passe indépendants, aucune fusion par e-mail)</label></p>';
+    echo '<p><label><input type="checkbox" name="sync_gallery_removals" value="1" '.checked(!empty($config['sync_gallery_removals']),true,false).'> Détacher les images importées retirées chez le partenaire (fichiers et images ajoutées à la main conservés)</label></p>';
+    echo '<button class="button button-primary" name="bridge_action" value="save">Enregistrer les réglages</button></form><hr><form method="post">';
     wp_nonce_field('wd29_bridge_admin');
-    echo '<p><label>Mapped product or variation key <input name="gallery_record" placeholder="ps:product:123"></label> <button class="button" name="bridge_action" value="restore_gallery">Restore detached gallery images</button></p><p>Reattaches retained imports for this record; the product is captured for synchronization.</p>';
-    echo '<p><label>Batch offset <input type="number" min="0" name="offset" value="0"></label> Batches contain up to 10 records per store.</p>';
-    foreach (['health' => 'Test connection', 'seed_products' => 'Capture both catalogs', 'seed_orders' => 'Capture both order histories', 'seed_customers' => 'Capture customer contacts', 'tick' => 'Process queue', 'retry' => 'Retry failures', 'resolve_order_upgrades'=>'Retry equivalent order updates', 'resolve_catalog'=>'Retry catalog conflicts with selected priority', 'normalize_stock'=>'Set unknown Woo variation quantities to zero'] as $value => $label) {
+    echo '<p><label>Identité du produit ou de la déclinaison <input name="gallery_record" placeholder="ps:product:123"></label> <button class="button" name="bridge_action" value="restore_gallery">Rattacher les images détachées</button></p><p>Rattache les images conservées pour cette fiche ; le produit est ensuite capturé.</p>';
+    echo '<p><label>Offset du lot <input type="number" min="0" name="offset" value="0"></label> Chaque lot contient jusqu\'à 10 fiches par boutique.</p>';
+    foreach (['health' => 'Tester la connexion', 'seed_products' => 'Capturer les deux catalogues', 'seed_orders' => 'Capturer les deux historiques de commandes', 'seed_customers' => 'Capturer les contacts clients', 'tick' => 'Traiter la file', 'retry' => 'Relancer les échecs', 'resolve_order_upgrades'=>'Relancer les mises à jour de commandes équivalentes', 'resolve_catalog'=>'Relancer les conflits de catalogue avec la priorité choisie', 'normalize_stock'=>'Mettre à zéro les quantités inconnues des déclinaisons Woo'] as $value => $label) {
         echo '<button class="button" name="bridge_action" value="' . esc_attr($value) . '">' . esc_html($label) . '</button> ';
     }
     echo '</form>';
     \WD29\Bridge\CustomFieldsAdmin::render();
-    echo '<h2>PrestaShop order status mappings</h2><p>Unknown source statuses are created automatically with their original label. Choose an existing WooCommerce status if needed. This changes mirror presentation only; the original PrestaShop status stays unchanged.</p><form method="post">';
+    echo '<h2>Statuts des commandes</h2><p>Les statuts PrestaShop inconnus sont créés automatiquement avec leur libellé d\'origine. Associez-les si besoin à un statut WooCommerce existant : seul l\'affichage du miroir change, le statut PrestaShop d\'origine reste identique.</p><form method="post">';
     wp_nonce_field('wd29_bridge_admin');
     $statusMappings=(array)get_option('wd29_bridge_status_mapping',[]);
     foreach ((array)get_option('wd29_bridge_source_statuses',[]) as $key=>$label) {
         echo '<p><label>'.esc_html($label).' <select name="status_mapping['.esc_attr($key).']">';
-        foreach ([$key=>'Automatic — PrestaShop: '.$label,'pending'=>'Pending payment','on-hold'=>'On hold','processing'=>'Processing','completed'=>'Completed','cancelled'=>'Cancelled','refunded'=>'Refunded','failed'=>'Failed'] as $value=>$text) {
+        foreach ([$key=>'Automatique (PrestaShop : '.$label,'pending'=>'Attente de paiement','on-hold'=>'En attente','processing'=>'En cours','completed'=>'Terminée','cancelled'=>'Annulée','refunded'=>'Remboursée','failed'=>'Échouée'] as $value=>$text) {
             echo '<option value="'.esc_attr($value).'" '.selected($statusMappings[$key]??$key,$value,false).'>'.esc_html($text).'</option>';
         }
         echo '</select></label></p>';
     }
-    echo '<button class="button" name="bridge_action" value="save_statuses">Save status mappings</button>';
-    echo '</form>'.\WD29\Bridge\DiagnosticsAdmin::render($engine).'<p>Last historical notice (use diagnostics above for current state): ' . esc_html(get_option('wd29_bridge_notice', '')) . '</p><h2>Latest events</h2><table class="widefat"><thead><tr>';
-    foreach (['seq','direction','kind','record_key','state','attempts','error','created_at'] as $heading) { echo '<th>' . esc_html($heading) . '</th>'; }
+    echo '<button class="button" name="bridge_action" value="save_statuses">Enregistrer les statuts</button>';
+    echo '</form>'.\WD29\Bridge\DiagnosticsAdmin::render($engine).'<p>Dernier message enregistré (l\'état actuel est dans les diagnostics) : ' . esc_html(get_option('wd29_bridge_notice', '')) . '</p><h2>Journal des événements</h2><table class="widefat"><thead><tr>';
+    foreach (['N°','Sens','Type','Identité','État','Essais','Erreur','Créé le'] as $heading) { echo '<th>' . esc_html($heading) . '</th>'; }
     echo '</tr></thead><tbody>';
     foreach ($engine->report() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>' . esc_html((string) $cell) . '</td>'; } echo '</tr>'; }
-    echo '</tbody></table><h2>Catalog audit</h2><p>Latest transmitted snapshots; unknown stock is not zero. Up to 200 products.</p><table class="widefat"><thead><tr>';
-    foreach (['source','local_id','name','brands','tags','type','regular','sale','tax','basis','initial_stock_snapshot','identifiers','dimensions_cm','features','variant_images','archived','purchase_price_net','supplier','seo'] as $heading) { echo '<th>' . esc_html($heading) . '</th>'; }
+    echo '</tbody></table><h2>Catalogue</h2><p>Derniers instantanés transmis ; un stock inconnu n\'est pas un stock nul. Jusqu\'à 200 produits.</p><table class="widefat"><thead><tr>';
+    foreach (['Origine','ID local','Nom','Marques','Étiquettes','Type','Prix','Promo','Taxe','Base','Stock initial','Identifiants','Dimensions (cm)','Caractéristiques','Images des déclinaisons','Archivé','Achat HT','Fournisseur','SEO'] as $heading) { echo '<th>' . esc_html($heading) . '</th>'; }
     echo '</tr></thead><tbody>';
     foreach ($engine->catalogAudit() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>' . esc_html((string)$cell) . '</td>'; } echo '</tr>'; }
-    echo '</tbody></table><h2>Order reconciliation</h2><p>Unlinked historical lines retain their source details; catalog links are repaired once products are available.</p><table class="widefat"><thead><tr>';
-    foreach (['source','local_id','total','currency','status','lines','unlinked_lines'] as $heading) { echo '<th>'.esc_html($heading).'</th>'; }
+    echo '</tbody></table><h2>Commandes</h2><p>Les lignes historiques sans lien gardent leurs détails d\'origine ; le lien au catalogue se fait dès que le produit existe.</p><table class="widefat"><thead><tr>';
+    foreach (['Origine','ID local','Total','Devise','Statut','Lignes','Lignes sans lien'] as $heading) { echo '<th>'.esc_html($heading).'</th>'; }
     echo '</tr></thead><tbody>';
     foreach ($engine->orderReport() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>'.esc_html((string)$cell).'</td>'; } echo '</tr>'; }
-    echo '</tbody></table><h2>Customer contact directory</h2><p>Read-only copies of contact details, edited on their source store. No login accounts, passwords or marketing consents are copied. Emails never merge identities automatically. Up to 200 contacts.</p><table class="widefat"><thead><tr>';
-    foreach (['source','name','email','phone','company','billing','addresses','shipping','type'] as $heading) { echo '<th>'.esc_html($heading).'</th>'; }
+    echo '</tbody></table><h2>Contacts clients</h2><p>Copies en lecture seule, à modifier sur leur boutique d\'origine. Aucun compte, mot de passe ni consentement marketing n\'est copié ; l\'e-mail ne sert jamais à fusionner deux fiches. Jusqu\'à 200 contacts.</p><table class="widefat"><thead><tr>';
+    foreach (['Origine','Nom','E-mail','Téléphone','Société','Facturation','Adresses','Livraison','Type'] as $heading) { echo '<th>'.esc_html($heading).'</th>'; }
     echo '</tr></thead><tbody>';
     foreach ($engine->customerReport() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>'.esc_html((string)$cell).'</td>'; } echo '</tr>'; }
-    echo '</tbody></table></div>';
+    echo '</tbody></table>';
+    $update = $engine->licence()->updateAvailable();
+    echo \WD29\Bridge\LicenceAdmin::render($engine, wp_nonce_field('wd29_bridge_admin', '_wpnonce', true, false),
+        $update ? '<p>Version ' . esc_html($update) . ' disponible. <a href="' . esc_url(admin_url('plugins.php')) . '">Mettre à jour depuis Extensions</a>.</p>' : '');
+    echo '</div>';
     echo \WD29\Bridge\AdminDesign::render(ob_get_clean(), $engine, 'woo');
 }
 
