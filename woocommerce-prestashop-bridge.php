@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.5.1
+ * Version: 0.6.0
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -11,13 +11,14 @@
  * Text Domain: wd29-bridge
  */
 defined('ABSPATH') || exit;
-const WD29_BRIDGE_VERSION = '0.5.1';
+const WD29_BRIDGE_VERSION = '0.6.0';
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/Licence.php';
 require_once __DIR__ . '/includes/LicenceAdmin.php';
 require_once __DIR__ . '/includes/Updater.php';
 require_once __DIR__ . '/includes/Engine.php';
 require_once __DIR__ . '/includes/ManualOrdersAdmin.php';
+require_once __DIR__ . '/includes/ManualRecordsAdmin.php';
 require_once __DIR__ . '/includes/AdminDesign.php';
 require_once __DIR__ . '/includes/OrderConflicts.php';
 require_once __DIR__ . '/includes/CustomerAccounts.php';
@@ -108,6 +109,15 @@ add_action('rest_api_init', function () {
 });
 add_action('admin_menu', function () { add_submenu_page('woocommerce', 'PrestaShop Bridge', 'PrestaShop Bridge', 'manage_options', 'wd29-bridge', 'wd29_bridge_admin'); });
 
+add_action('admin_post_wd29_sync_batch',function(){
+    if(!current_user_can('manage_options')){wp_send_json(['ok'=>false,'error'=>'Accès refusé.'],403);}
+    if(($_SERVER['REQUEST_METHOD']??'')!=='POST'){wp_send_json(['ok'=>false,'error'=>'POST requis.'],405);}
+    check_admin_referer('wd29_bridge_admin');
+    try{$result=\WD29\Bridge\ManualRecordsAdmin::batch(wd29_bridge(),wp_unslash($_POST));}
+    catch(\Throwable $error){$result=['ok'=>false,'error'=>$error->getMessage()];}
+    nocache_headers();wp_send_json($result);
+});
+
 function wd29_bridge_admin(): void {
     if (!current_user_can('manage_options')) { return; }
     $engine = wd29_bridge();
@@ -116,9 +126,11 @@ function wd29_bridge_admin(): void {
         check_admin_referer('wd29_bridge_admin');
         try {
             $action = sanitize_key($_POST['bridge_action'] ?? '');
+            $recordMessage=\WD29\Bridge\ManualRecordsAdmin::handle($engine,wp_unslash($_POST));
             $licenceMessage = \WD29\Bridge\LicenceAdmin::handle($engine, $action, (string) wp_unslash($_POST['licence_key'] ?? ''));
             $manualMessage = \WD29\Bridge\ManualOrdersAdmin::handle($engine, wp_unslash($_POST));
-            if ($manualMessage !== null) { $message=$manualMessage; }
+            if ($recordMessage !== null) { $message=$recordMessage; }
+            elseif ($manualMessage !== null) { $message=$manualMessage; }
             elseif ($licenceMessage !== null) { $message = $licenceMessage; \WD29\Bridge\Updater::forget(); }
             elseif ($action === 'save') {
                 $config = $engine->config();
@@ -225,7 +237,7 @@ function wd29_bridge_admin(): void {
         $update ? '<p>Version ' . esc_html($update) . ' disponible. <a href="' . esc_url(admin_url('plugins.php')) . '">Mettre à jour depuis Extensions</a>.</p>' : '');
     echo '</div>';
     $html=ob_get_clean();$end=strrpos($html,'</div>');
-    $panel=\WD29\Bridge\ManualOrdersAdmin::render($engine,wp_nonce_field('wd29_bridge_admin','_wpnonce',true,false),wp_unslash($_POST));
+    $panel=\WD29\Bridge\ManualRecordsAdmin::render($engine,wp_nonce_field('wd29_bridge_admin','_wpnonce',true,false),wp_unslash($_POST),admin_url('admin-post.php?action=wd29_sync_batch')).\WD29\Bridge\ManualOrdersAdmin::render($engine,wp_nonce_field('wd29_bridge_admin','_wpnonce',true,false),wp_unslash($_POST));
     if($end!==false){$html=substr_replace($html,$panel,$end,0);}
     echo \WD29\Bridge\AdminDesign::render($html, $engine, 'woo');
 }

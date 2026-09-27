@@ -85,6 +85,21 @@ final class WooAdapter
         return array_map('intval',$wpdb->get_col($wpdb->prepare("SELECT p.ID FROM {$wpdb->posts} p WHERE p.post_type='product' AND (p.post_status IN ('publish','private','draft','pending') OR (p.post_status='trash' AND EXISTS (SELECT 1 FROM {$wpdb->prefix}woocommerce_order_itemmeta m WHERE m.meta_key='_product_id' AND m.meta_value=CAST(p.ID AS CHAR)))) ORDER BY p.ID LIMIT %d OFFSET %d",$limit,$offset)));
     }
 
+    public function manualContactKeys(int $offset,int $limit): array
+    {
+        global $wpdb;$p=$wpdb->prefix;
+        $users="SELECT CONCAT('woo:customer:',u.ID) record_key FROM {$p}users u WHERE EXISTS(SELECT 1 FROM {$p}usermeta m WHERE m.user_id=u.ID AND m.meta_key='{$p}capabilities' AND m.meta_value LIKE '%\"customer\"%') AND NOT EXISTS(SELECT 1 FROM {$p}usermeta m WHERE m.user_id=u.ID AND m.meta_key='_wd29_bridge_customer_origin')";
+        $hpos=class_exists('Automattic\\WooCommerce\\Utilities\\OrderUtil') && \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled();
+        $guests=$hpos?"SELECT CONCAT('woo:guest:',o.id) record_key FROM {$p}wc_orders o WHERE o.type='shop_order' AND o.customer_id=0 AND o.status NOT IN ('trash','auto-draft','wc-checkout-draft') AND NOT EXISTS(SELECT 1 FROM {$p}wc_orders_meta m WHERE m.order_id=o.id AND m.meta_key='_wd29_bridge_origin')":"SELECT CONCAT('woo:guest:',o.ID) record_key FROM {$p}posts o WHERE o.post_type='shop_order' AND o.post_status NOT IN ('trash','auto-draft','wc-checkout-draft') AND NOT EXISTS(SELECT 1 FROM {$p}postmeta m WHERE m.post_id=o.ID AND (m.meta_key='_wd29_bridge_origin' OR (m.meta_key='_customer_user' AND CAST(m.meta_value AS UNSIGNED)>0)))";
+        return array_column($this->sql('SELECT record_key FROM ('.$users.' UNION ALL '.$guests.') contacts ORDER BY record_key LIMIT '.(int)$offset.','.(int)$limit),'record_key');
+    }
+    public function manualContactOriginal(string $key): bool
+    {
+        $parts=explode(':',$key);$id=(int)$parts[2];
+        if($parts[1]==='guest'){$o=wc_get_order($id);return $o && !$o->get_customer_id() && !$o->get_meta('_wd29_bridge_origin') && $this->orderSyncable($id);}
+        $u=get_userdata($id);return $u && in_array('customer',$u->roles,true) && !get_user_meta($id,'_wd29_bridge_customer_origin',true);
+    }
+
     private function prices($product): array
     {
         $rates = $product->is_taxable() ? \WC_Tax::get_base_tax_rates($product->get_tax_class()) : [];
