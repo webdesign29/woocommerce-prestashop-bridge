@@ -2,7 +2,7 @@
 
 Synchronisation directe **WooCommerce ↔ PrestaShop** : catalogue, stocks, commandes et contacts clients, avec webhooks signés et file d’attente persistante.
 
-**Version : 0.6.1.** Ce dépôt contient le plugin WooCommerce ; installez également le [plugin partenaire](https://github.com/webdesign29/prestashop-woocommerce-bridge).
+**Version : 0.6.2.** Ce dépôt contient le plugin WooCommerce ; installez également le [plugin partenaire](https://github.com/webdesign29/prestashop-woocommerce-bridge).
 
 [Télécharger les archives](https://plugins.inklura.fr/compte) (licence requise) · [Guide d’installation](https://plugins.inklura.fr/docs/licence) · [Exploitation et planificateur](OPERATIONS.md) · [Tests et cas particuliers](ACCEPTANCE.md)
 

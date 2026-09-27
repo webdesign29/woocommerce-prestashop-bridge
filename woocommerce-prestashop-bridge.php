@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.6.1
+ * Version: 0.6.2
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -11,7 +11,7 @@
  * Text Domain: wd29-bridge
  */
 defined('ABSPATH') || exit;
-const WD29_BRIDGE_VERSION = '0.6.1';
+const WD29_BRIDGE_VERSION = '0.6.2';
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/Licence.php';
 require_once __DIR__ . '/includes/LicenceAdmin.php';
@@ -178,6 +178,7 @@ function wd29_bridge_admin(): void {
             }
         } catch (\Throwable $e) { $message = $e->getMessage(); }
     }
+    $view=\WD29\Bridge\AdminDesign::currentView();
     $config = $engine->config();
     ob_start();
     echo '<div class="wrap"><h1>PrestaShop Bridge</h1><p>Connexion directe. En mode audit, les modifications reçues sont mises en file sans être appliquées. Chaque fiche garde son identité d\'origine ; une UGS vide ne sert jamais à rapprocher deux fiches.</p>';
@@ -203,7 +204,7 @@ function wd29_bridge_admin(): void {
         echo '<button class="button" name="bridge_action" value="' . esc_attr($value) . '">' . esc_html($label) . '</button> ';
     }
     echo '</form>';
-    \WD29\Bridge\CustomFieldsAdmin::render();
+    if($view==='settings')\WD29\Bridge\CustomFieldsAdmin::render();
     echo '<h2>Statuts des commandes</h2><p>Les statuts PrestaShop inconnus sont créés automatiquement avec leur libellé d\'origine. Associez-les si besoin à un statut WooCommerce existant : seul l\'affichage du miroir change, le statut PrestaShop d\'origine reste identique.</p><form method="post">';
     wp_nonce_field('wd29_bridge_admin');
     $statusMappings=(array)get_option('wd29_bridge_status_mapping',[]);
@@ -215,22 +216,22 @@ function wd29_bridge_admin(): void {
         echo '</select></label></p>';
     }
     echo '<button class="button" name="bridge_action" value="save_statuses">Enregistrer les statuts</button>';
-    echo '</form>'.\WD29\Bridge\DiagnosticsAdmin::render($engine).'<p>Dernier message enregistré (l\'état actuel est dans les diagnostics) : ' . esc_html(get_option('wd29_bridge_notice', '')) . '</p><h2>Journal des événements</h2><table class="widefat"><thead><tr>';
+    echo '</form>'.\WD29\Bridge\DiagnosticsAdmin::render($engine,$view).'<p>Dernier message enregistré (l\'état actuel est dans les diagnostics) : ' . esc_html(get_option('wd29_bridge_notice', '')) . '</p><h2>Journal des événements</h2><table class="widefat"><thead><tr>';
     foreach (['N°','Sens','Type','Identité','État','Essais','Erreur','Créé le'] as $heading) { echo '<th>' . esc_html($heading) . '</th>'; }
     echo '</tr></thead><tbody>';
-    foreach ($engine->report() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>' . esc_html((string) $cell) . '</td>'; } echo '</tr>'; }
+    foreach (($view==='activity'?$engine->report():[]) as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>' . esc_html((string) $cell) . '</td>'; } echo '</tr>'; }
     echo '</tbody></table><h2>Catalogue</h2><p>Derniers instantanés transmis ; un stock inconnu n\'est pas un stock nul. Jusqu\'à 200 produits.</p><table class="widefat"><thead><tr>';
     foreach (['Origine','ID local','Nom','Marques','Étiquettes','Type','Prix','Promo','Taxe','Base','Stock initial','Identifiants','Dimensions (cm)','Caractéristiques','Images des déclinaisons','Archivé','Achat HT','Fournisseur','SEO'] as $heading) { echo '<th>' . esc_html($heading) . '</th>'; }
     echo '</tr></thead><tbody>';
-    foreach ($engine->catalogAudit() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>' . esc_html((string)$cell) . '</td>'; } echo '</tr>'; }
+    foreach (($view==='reports'?$engine->catalogAudit():[]) as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>' . esc_html((string)$cell) . '</td>'; } echo '</tr>'; }
     echo '</tbody></table><h2>Commandes</h2><p>Les lignes historiques sans lien gardent leurs détails d\'origine ; le lien au catalogue se fait dès que le produit existe.</p><table class="widefat"><thead><tr>';
     foreach (['Origine','ID local','Total','Devise','Statut','Lignes','Lignes sans lien'] as $heading) { echo '<th>'.esc_html($heading).'</th>'; }
     echo '</tr></thead><tbody>';
-    foreach ($engine->orderReport() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>'.esc_html((string)$cell).'</td>'; } echo '</tr>'; }
+    foreach (($view==='reports'?$engine->orderReport():[]) as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>'.esc_html((string)$cell).'</td>'; } echo '</tr>'; }
     echo '</tbody></table><h2>Contacts clients</h2><p>Copies en lecture seule, à modifier sur leur boutique d\'origine. Aucun compte, mot de passe ni consentement marketing n\'est copié ; l\'e-mail ne sert jamais à fusionner deux fiches. Jusqu\'à 200 contacts.</p><table class="widefat"><thead><tr>';
     foreach (['Origine','Nom','E-mail','Téléphone','Société','Facturation','Adresses','Livraison','Type'] as $heading) { echo '<th>'.esc_html($heading).'</th>'; }
     echo '</tr></thead><tbody>';
-    foreach ($engine->customerReport() as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>'.esc_html((string)$cell).'</td>'; } echo '</tr>'; }
+    foreach (($view==='reports'?$engine->customerReport():[]) as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>'.esc_html((string)$cell).'</td>'; } echo '</tr>'; }
     echo '</tbody></table>';
     $update = $engine->licence()->updateAvailable();
     echo \WD29\Bridge\LicenceAdmin::render($engine, wp_nonce_field('wd29_bridge_admin', '_wpnonce', true, false),
