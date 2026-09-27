@@ -444,6 +444,13 @@ final class WooAdapter
         }
     }
 
+    /** Native labels for the side-by-side admin comparison; never used for sync hashes. */
+    public function manualOrderSummary(int $id): array
+    {
+        $order=wc_get_order($id); if (!$order) { throw new \RuntimeException('Commande introuvable.'); }
+        return ['number'=>(string)$order->get_order_number(),'status'=>$order->get_status(),'status_label'=>wc_get_order_status_name($order->get_status()),'total'=>$order->get_total(),'currency'=>$order->get_currency()];
+    }
+
     public function orderSummary(int $id): array
     {
         $o=wc_get_order($id); $missing=0;

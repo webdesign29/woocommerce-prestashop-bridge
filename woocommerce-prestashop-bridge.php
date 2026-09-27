@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.5.0
+ * Version: 0.5.1
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -11,7 +11,7 @@
  * Text Domain: wd29-bridge
  */
 defined('ABSPATH') || exit;
-const WD29_BRIDGE_VERSION = '0.5.0';
+const WD29_BRIDGE_VERSION = '0.5.1';
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/Licence.php';
 require_once __DIR__ . '/includes/LicenceAdmin.php';
@@ -162,7 +162,7 @@ function wd29_bridge_admin(): void {
                 $offset = max(0, (int) ($_POST['offset'] ?? 0));
                 $count = $engine->seed($kind, $offset);
                 $peer = $engine->peer(['op' => 'seed', 'kind' => $kind, 'offset' => $offset]);
-                $message = 'Lot capturé : ' . $count . ' ici, ' . $peer['count'] . ' chez le partenaire. Offset suivant : ' . ($offset + 10);
+                $message = 'Lot capturé : ' . $count . ' sur WordPress, ' . $peer['count'] . ' sur PrestaShop. Offset suivant : ' . ($offset + 10);
             }
         } catch (\Throwable $e) { $message = $e->getMessage(); }
     }
@@ -187,7 +187,7 @@ function wd29_bridge_admin(): void {
     wp_nonce_field('wd29_bridge_admin');
     echo '<p><label>Identité du produit ou de la déclinaison <input name="gallery_record" placeholder="ps:product:123"></label> <button class="button" name="bridge_action" value="restore_gallery">Rattacher les images détachées</button></p><p>Rattache les images conservées pour cette fiche ; le produit est ensuite capturé.</p>';
     echo '<p><label>Offset du lot <input type="number" min="0" name="offset" value="0"></label> Chaque lot contient jusqu\'à 10 fiches par boutique.</p>';
-    foreach (['health' => 'Tester la connexion', 'seed_products' => 'Capturer les deux catalogues', 'seed_orders' => 'Capturer les deux historiques de commandes', 'seed_customers' => 'Capturer les contacts clients', 'tick' => 'Traiter la file', 'retry' => 'Relancer les échecs', 'resolve_order_upgrades'=>'Relancer les mises à jour de commandes équivalentes', 'resolve_catalog'=>'Relancer les conflits de catalogue avec la priorité choisie', 'normalize_stock'=>'Mettre à zéro les quantités inconnues des déclinaisons Woo'] as $value => $label) {
+    foreach (['health' => 'Tester la connexion', 'seed_products' => 'Catalogues : WordPress ↔ PrestaShop', 'seed_orders' => 'Commandes : WordPress ↔ PrestaShop', 'seed_customers' => 'Contacts : WordPress ↔ PrestaShop', 'tick' => 'Traiter les échanges de WordPress', 'retry' => 'Relancer les échecs', 'resolve_order_upgrades'=>'Relancer les mises à jour de commandes équivalentes', 'resolve_catalog'=>'Relancer les conflits de catalogue avec la priorité choisie', 'normalize_stock'=>'Mettre à zéro les quantités inconnues des déclinaisons Woo'] as $value => $label) {
         echo '<button class="button" name="bridge_action" value="' . esc_attr($value) . '">' . esc_html($label) . '</button> ';
     }
     echo '</form>';
