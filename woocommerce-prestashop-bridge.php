@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.4.0
+ * Version: 0.5.0
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -11,12 +11,13 @@
  * Text Domain: wd29-bridge
  */
 defined('ABSPATH') || exit;
-const WD29_BRIDGE_VERSION = '0.4.0';
+const WD29_BRIDGE_VERSION = '0.5.0';
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/Licence.php';
 require_once __DIR__ . '/includes/LicenceAdmin.php';
 require_once __DIR__ . '/includes/Updater.php';
 require_once __DIR__ . '/includes/Engine.php';
+require_once __DIR__ . '/includes/ManualOrdersAdmin.php';
 require_once __DIR__ . '/includes/AdminDesign.php';
 require_once __DIR__ . '/includes/OrderConflicts.php';
 require_once __DIR__ . '/includes/CustomerAccounts.php';
@@ -116,7 +117,9 @@ function wd29_bridge_admin(): void {
         try {
             $action = sanitize_key($_POST['bridge_action'] ?? '');
             $licenceMessage = \WD29\Bridge\LicenceAdmin::handle($engine, $action, (string) wp_unslash($_POST['licence_key'] ?? ''));
-            if ($licenceMessage !== null) { $message = $licenceMessage; \WD29\Bridge\Updater::forget(); }
+            $manualMessage = \WD29\Bridge\ManualOrdersAdmin::handle($engine, wp_unslash($_POST));
+            if ($manualMessage !== null) { $message=$manualMessage; }
+            elseif ($licenceMessage !== null) { $message = $licenceMessage; \WD29\Bridge\Updater::forget(); }
             elseif ($action === 'save') {
                 $config = $engine->config();
                 $mode = sanitize_key($_POST['mode'] ?? 'disabled');
@@ -221,7 +224,10 @@ function wd29_bridge_admin(): void {
     echo \WD29\Bridge\LicenceAdmin::render($engine, wp_nonce_field('wd29_bridge_admin', '_wpnonce', true, false),
         $update ? '<p>Version ' . esc_html($update) . ' disponible. <a href="' . esc_url(admin_url('plugins.php')) . '">Mettre à jour depuis Extensions</a>.</p>' : '');
     echo '</div>';
-    echo \WD29\Bridge\AdminDesign::render(ob_get_clean(), $engine, 'woo');
+    $html=ob_get_clean();$end=strrpos($html,'</div>');
+    $panel=\WD29\Bridge\ManualOrdersAdmin::render($engine,wp_nonce_field('wd29_bridge_admin','_wpnonce',true,false),wp_unslash($_POST));
+    if($end!==false){$html=substr_replace($html,$panel,$end,0);}
+    echo \WD29\Bridge\AdminDesign::render($html, $engine, 'woo');
 }
 
 add_action('woocommerce_product_options_general_product_data',function(){

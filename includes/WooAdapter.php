@@ -79,7 +79,7 @@ final class WooAdapter
             return array_map(function($id){return $this->engine->contactId(Protocol::key('woo','customer',(int)$id));},$ids);
         }
         if ($kind === 'order') {
-            return wc_get_orders(['return' => 'ids', 'limit' => $limit, 'offset' => $offset, 'orderby' => 'ID', 'order' => 'ASC', 'type' => 'shop_order']);
+            return wc_get_orders(['return' => 'ids', 'limit' => $limit, 'offset' => $offset, 'orderby' => 'ID', 'order' => 'ASC', 'type' => 'shop_order', 'status' => array_values(array_diff(array_keys(wc_get_order_statuses()), ['wc-checkout-draft','wc-auto-draft','wc-trash']))]);
         }
         global $wpdb;
         return array_map('intval',$wpdb->get_col($wpdb->prepare("SELECT p.ID FROM {$wpdb->posts} p WHERE p.post_type='product' AND (p.post_status IN ('publish','private','draft','pending') OR (p.post_status='trash' AND EXISTS (SELECT 1 FROM {$wpdb->prefix}woocommerce_order_itemmeta m WHERE m.meta_key='_product_id' AND m.meta_value=CAST(p.ID AS CHAR)))) ORDER BY p.ID LIMIT %d OFFSET %d",$limit,$offset)));
@@ -449,6 +449,12 @@ final class WooAdapter
         $o=wc_get_order($id); $missing=0;
         foreach ($o->get_items() as $item) { if (!$item->get_product_id()) { $missing++; } }
         return ['local_id'=>$id,'total'=>$o->get_total(),'currency'=>$o->get_currency(),'status'=>$o->get_status(),'lines'=>count($o->get_items()),'unlinked_lines'=>$missing];
+    }
+
+    public function orderSyncable(int $id): bool
+    {
+        $order=wc_get_order($id);
+        return $order && !in_array($order->get_status(), ['checkout-draft','auto-draft','trash'], true);
     }
 
     public function order(int $id): array
