@@ -32,6 +32,62 @@ final class WooAdapter
     public function site(): string { return 'woo'; }
     /** A trashed product still exists and is not a permanent deletion. */
     public function productExists(int $id): bool { return get_post_type($id)==='product'; }
+    /** A public native product page only: no preview, private or password-protected URL. */
+    public function productPublicUrl(int $id): string
+    {
+        if ($id < 1 || get_post_type($id) !== 'product' || get_post_status($id) !== 'publish' || (string) get_post_field('post_password', $id) !== '') { return ''; }
+        $product = wc_get_product($id);
+        if (!$product || $product->get_status() !== 'publish') { return ''; }
+        $url = get_permalink($id);
+        return is_string($url) ? $url : '';
+    }
+
+    /** A token-free login-protected route, never a native URL containing admin credentials. */
+    public function recordPanelAdminUrl(string $kind, string $key): string
+    {
+        if (RecordPanel::nativeId($this->engine, $kind, $key) < 1) { return ''; }
+        return add_query_arg(['action'=>'wd29_open_record','kind'=>$kind,'key'=>$key], admin_url('admin-post.php'));
+    }
+
+    /** Resolve an editor's native ID without creating maps, contacts or snapshots. */
+    public function recordPanelIdentity(string $kind, int $nativeId): string
+    {
+        if ($nativeId < 1 || !in_array($kind, ['product','order','customer'], true)) { throw new \RuntimeException('Fiche indisponible.'); }
+        if ($kind === 'customer') {
+            $user = get_userdata($nativeId);
+            if (!$user || !in_array('customer', (array) $user->roles, true)) { throw new \RuntimeException('Client indisponible.'); }
+            $origin = get_user_meta($nativeId, '_wd29_bridge_customer_origin', true);
+            if (!is_string($origin)) { throw new \RuntimeException('Origine client invalide.'); }
+            $link = $this->engine->sql('SELECT record_key FROM {b}account_links WHERE native_id=? LIMIT 1', [$nativeId])[0] ?? null;
+            if ($origin !== '') {
+                if (!preg_match('/^ps:customer:[1-9][0-9]{0,14}$/D', $origin) || !$link || $link['record_key'] !== $origin) { throw new \RuntimeException('Correspondance client à vérifier.'); }
+                $map = $this->engine->sql('SELECT kind,local_id FROM {b}map WHERE record_key=? LIMIT 1', [$origin])[0] ?? null;
+                $contact = $map && $map['kind'] === 'customer' ? ($this->engine->sql('SELECT record_key FROM {b}contacts WHERE id=? LIMIT 1', [(int) $map['local_id']])[0] ?? null) : null;
+                if (!$contact || $contact['record_key'] !== $origin) { throw new \RuntimeException('Contact synchronisé indisponible.'); }
+                return $origin;
+            }
+            if ($link) { throw new \RuntimeException('Origine du compte client à vérifier.'); }
+            return Protocol::key('woo', 'customer', $nativeId);
+        }
+        $order = null;
+        if ($kind === 'product') {
+            if (get_post_type($nativeId) !== 'product' || !in_array(get_post_status($nativeId), ['publish','private','draft','pending','future'], true) || !wc_get_product($nativeId)) { throw new \RuntimeException('Produit indisponible.'); }
+        } else {
+            $order = wc_get_order($nativeId);
+            if (!$order || $order->get_type() !== 'shop_order' || !$this->orderSyncable($nativeId)) { throw new \RuntimeException('Commande indisponible.'); }
+        }
+        $map = $this->engine->sql('SELECT record_key FROM {b}map WHERE kind=? AND local_id=? LIMIT 1', [$kind, $nativeId])[0] ?? null;
+        $key = $map ? (string) $map['record_key'] : Protocol::key('woo', $kind, $nativeId);
+        if (!preg_match('/^(woo|ps):' . $kind . ':[1-9][0-9]{0,14}$/D', $key) || (strpos($key, 'woo:') === 0 && $key !== Protocol::key('woo', $kind, $nativeId))) { throw new \RuntimeException('Origine de la fiche à vérifier.'); }
+        if ($order) {
+            $origin = $order->get_meta('_wd29_bridge_origin');
+            $snapshot = $order->get_meta('_wd29_bridge_snapshot');
+            if ($origin && (!$map || strpos($key, 'ps:') !== 0)) { throw new \RuntimeException('Correspondance de commande à vérifier.'); }
+            if (is_array($snapshot) && isset($snapshot['key']) && $snapshot['key'] !== $key) { throw new \RuntimeException('Origine de commande différente.'); }
+        }
+        return $key;
+    }
+
     public function archiveProduct(int $id): void
     {
         $product=wc_get_product($id);

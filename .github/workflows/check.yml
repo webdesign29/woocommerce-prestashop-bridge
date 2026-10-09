@@ -15,9 +15,21 @@ jobs:
         run: php tests/manual-orders.php
       - name: Product and contact manual sync checks
         run: php tests/manual-records.php
+      - name: Native customer conflict guard checks
+        run: php tests/customer-record-guard.php
       - name: Bounded process and compatibility checks
         run: php tests/processes.php
       - name: Admin context regression checks
         run: php tests/admin-context.php
+      - name: Product link and editor authorization checks
+        run: |
+          php tests/product-links.php
+          php tests/product-links-admin.php
+      - name: Single-record workspace checks
+        run: |
+          php tests/record-panel.php
+          php tests/record-panel-admin.php
+          node --check includes/record-panel.js
+          node --check includes/product-links.js
       - name: Build installation archive
         run: python3 scripts/package.py

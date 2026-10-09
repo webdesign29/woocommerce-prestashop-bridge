@@ -4,7 +4,7 @@ import hashlib
 import re
 root = Path(__file__).resolve().parents[1]
 slug = 'woocommerce-prestashop-bridge'
-files = [root / 'includes' / 'admin-design.css', root / 'includes' / 'admin-design.js'] + [root / name for name in ['woocommerce-prestashop-bridge.php', 'README.md', 'CHANGELOG.md', 'LICENSE', 'OPERATIONS.md', 'ACCEPTANCE.md', 'SUPPLIERS.md', 'CUSTOM-FIELDS.md', 'GALLERY.md']]
+files = [root / 'includes' / 'admin-design.css', root / 'includes' / 'admin-design.js', root / 'includes' / 'product-links.js', root / 'includes' / 'record-panel.js'] + [root / name for name in ['woocommerce-prestashop-bridge.php', 'README.md', 'CHANGELOG.md', 'LICENSE', 'OPERATIONS.md', 'ACCEPTANCE.md', 'SUPPLIERS.md', 'CUSTOM-FIELDS.md', 'GALLERY.md']]
 for directory in ['includes']:
     files.extend(sorted((root / directory).rglob('*.php')))
 main = (root / (slug + '.php')).read_text()

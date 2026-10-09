@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WD29 WooCommerce PrestaShop Bridge
  * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.6.2
+ * Version: 0.6.4
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -11,7 +11,7 @@
  * Text Domain: wd29-bridge
  */
 defined('ABSPATH') || exit;
-const WD29_BRIDGE_VERSION = '0.6.2';
+const WD29_BRIDGE_VERSION = '0.6.4';
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/Licence.php';
 require_once __DIR__ . '/includes/LicenceAdmin.php';
@@ -19,6 +19,8 @@ require_once __DIR__ . '/includes/Updater.php';
 require_once __DIR__ . '/includes/Engine.php';
 require_once __DIR__ . '/includes/ManualOrdersAdmin.php';
 require_once __DIR__ . '/includes/ManualRecordsAdmin.php';
+require_once __DIR__ . '/includes/ProductLinksAdmin.php';
+require_once __DIR__ . '/includes/RecordPanelAdmin.php';
 require_once __DIR__ . '/includes/AdminDesign.php';
 require_once __DIR__ . '/includes/OrderConflicts.php';
 require_once __DIR__ . '/includes/CustomerAccounts.php';
@@ -39,6 +41,8 @@ function wd29_bridge(): \WD29\Bridge\Engine {
     }
     return $engine;
 }
+\WD29\Bridge\ProductLinksAdmin::register(__FILE__);
+\WD29\Bridge\RecordPanelAdmin::register(__FILE__);
 add_action('init', ['\WD29\Bridge\WooAdapter','registerSourceStatuses']);
 (new \WD29\Bridge\Updater('wd29_bridge', __FILE__))->register();
 // One admin notice while live mode is paused or the grace period is running (reads one option).
@@ -64,7 +68,7 @@ register_activation_hook(__FILE__, function () {
 register_deactivation_hook(__FILE__, function () { wp_clear_scheduled_hook('wd29_bridge_tick'); });
 add_filter('cron_schedules', function ($schedules) { $schedules['wd29_minute'] = ['interval' => 60, 'display' => 'Every minute (WD29 bridge)']; return $schedules; });
 add_action('plugins_loaded', function () {
-    if (get_option('wd29_bridge_schema') !== '6') { wd29_bridge()->install(); update_option('wd29_bridge_schema','6',false); }
+    if (get_option('wd29_bridge_schema') !== '7') { wd29_bridge()->install(); update_option('wd29_bridge_schema','7',false); }
 }, 30);
 add_action('wd29_bridge_tick', function () { if (function_exists('wc_get_product')) { wd29_bridge()->tick(); } });
 function wd29_bridge_capture_later(string $kind, int $id): void {
