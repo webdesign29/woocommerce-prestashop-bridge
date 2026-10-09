@@ -97,6 +97,7 @@ final class WooAdapter
 
     public function prefix(): string { global $wpdb; return $wpdb->prefix; }
     public function config(): array { return (array) get_option('wd29_bridge_config', ['mode' => 'disabled']); }
+    public function saveConfig(array $config): void { update_option('wd29_bridge_config', $config, false); }
     public function licenceState(?array $state=null): array
     {
         if ($state!==null) { update_option('wd29_bridge_licence',$state,false); return $state; }

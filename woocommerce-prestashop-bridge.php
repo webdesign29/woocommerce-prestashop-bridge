@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Inklura Sync
  * Description: Synchronisation WooCommerce ↔ PrestaShop : catalogue, stocks, commandes et clients.
- * Version: 0.6.6
+ * Version: 0.6.7
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -12,7 +12,7 @@
  * Text Domain: wd29-bridge
  */
 defined('ABSPATH') || exit;
-const WD29_BRIDGE_VERSION = '0.6.6';
+const WD29_BRIDGE_VERSION = '0.6.7';
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/Licence.php';
 require_once __DIR__ . '/includes/LicenceAdmin.php';
@@ -29,6 +29,7 @@ require_once __DIR__ . '/includes/Refunds.php';
 require_once __DIR__ . '/includes/Suppliers.php';
 require_once __DIR__ . '/includes/Gallery.php';
 require_once __DIR__ . '/includes/DiagnosticsAdmin.php';
+require_once __DIR__ . '/includes/ActionsAdmin.php';
 require_once __DIR__ . '/includes/WooAdapter.php';
 require_once __DIR__ . '/includes/CustomFields.php';
 require_once __DIR__ . '/includes/CustomFieldsAdmin.php';
@@ -57,7 +58,12 @@ add_action('admin_notices', function () {
     if (($engine->config()['mode'] ?? 'disabled') === 'disabled') { return; }
     $s = $engine->licence()->summary();
     if ($s['tone'] === 'ok') { return; }
-    echo '<div class="notice notice-' . ($s['live'] ? 'warning' : 'error') . '"><p><strong>Inklura Sync : ' . esc_html($s['label']) . '.</strong> ' . esc_html($s['text']) . ' <a href="' . esc_url(admin_url('admin.php?page=wd29-bridge#wd-licence')) . '">Licence</a></p></div>';
+    echo '<div class="notice notice-' . ($s['live'] ? 'warning' : 'error') . '"><p><strong>Inklura Sync : ' . esc_html($s['label']) . '.</strong> ' . esc_html($s['text']) . ' <a href="' . esc_url(admin_url('admin.php?page=wd29-bridge&wd_view=licence#wd-licence')) . '">Licence</a></p></div>';
+});
+// Decisions or settings blocking synchronization, on every admin screen, with a link to the page that resolves them.
+add_action('admin_notices', function () {
+    if (!current_user_can('manage_options') || (($_GET['page'] ?? '') === 'wd29-bridge')) { return; }
+    echo \WD29\Bridge\ActionsAdmin::notice(wd29_bridge(), 'woo', function ($view) { return admin_url('admin.php?page=wd29-bridge&wd_view=' . rawurlencode($view)); });
 });
 add_filter('wc_order_statuses', ['\WD29\Bridge\WooAdapter','statusList']);
 register_activation_hook(__FILE__, function () {
@@ -131,10 +137,13 @@ function wd29_bridge_admin(): void {
         check_admin_referer('wd29_bridge_admin');
         try {
             $action = sanitize_key($_POST['bridge_action'] ?? '');
-            $recordMessage=\WD29\Bridge\ManualRecordsAdmin::handle($engine,wp_unslash($_POST));
+            $decisionMessage = \WD29\Bridge\ActionsAdmin::handle($engine, $action, wp_unslash($_POST));
+            if ($decisionMessage !== null) { $message = $decisionMessage; $action = ''; }
+            $recordMessage=$action===''?null:\WD29\Bridge\ManualRecordsAdmin::handle($engine,wp_unslash($_POST));
             $licenceMessage = \WD29\Bridge\LicenceAdmin::handle($engine, $action, (string) wp_unslash($_POST['licence_key'] ?? ''));
             $manualMessage = \WD29\Bridge\ManualOrdersAdmin::handle($engine, wp_unslash($_POST));
-            if ($recordMessage !== null) { $message=$recordMessage; }
+            if ($action === '') {}
+            elseif ($recordMessage !== null) { $message=$recordMessage; }
             elseif ($manualMessage !== null) { $message=$manualMessage; }
             elseif ($licenceMessage !== null) { $message = $licenceMessage; \WD29\Bridge\Updater::forget(); }
             elseif ($action === 'save') {
@@ -148,8 +157,8 @@ function wd29_bridge_admin(): void {
                 $policy = sanitize_key($_POST['conflict_policy'] ?? 'review');
                 if (!in_array($policy, ['review','woo','ps'], true)) { throw new \RuntimeException('Règle de conflit invalide.'); }
                 $engine->validateSettings($mode, $peer, $secret !== '' ? $secret : ($config['secret'] ?? ''));
-                update_option('wd29_bridge_config', ['mode' => $mode, 'peer' => $peer, 'secret' => $secret !== '' ? $secret : ($config['secret'] ?? ''), 'conflict_policy' => $policy, 'native_customers'=>!empty($_POST['native_customers']), 'sync_gallery_removals'=>!empty($_POST['sync_gallery_removals'])], false);
-                $message = 'Réglages enregistrés.';
+                update_option('wd29_bridge_config', ['mode' => $mode, 'peer' => $peer, 'secret' => $secret !== '' ? $secret : ($config['secret'] ?? ''), 'conflict_policy' => $policy, 'native_customers'=>!empty($_POST['native_customers']), 'sync_gallery_removals'=>!empty($_POST['sync_gallery_removals'])] + $config, false);
+                $message = 'Réglages enregistrés.' . $engine->settingsChanged($config);
             } elseif ($action === 'restore_gallery') {
                 $engine->adapter->restoreGallery(trim(wp_unslash($_POST['gallery_record']??''))); $message='Images de galerie rattachées de nouveau ; produit capturé.';
             } elseif ($action === 'save_field_rows') {
@@ -188,6 +197,7 @@ function wd29_bridge_admin(): void {
     ob_start();
     echo '<div class="wrap"><h1>PrestaShop Bridge</h1><p>Connexion directe. En mode audit, les modifications reçues sont mises en file sans être appliquées. Chaque fiche garde son identité d\'origine ; une UGS vide ne sert jamais à rapprocher deux fiches.</p>';
     if ($message) { echo '<div class="notice notice-info"><p>' . esc_html($message) . '</p></div>'; }
+    echo \WD29\Bridge\ActionsAdmin::render($engine, 'woo', wp_nonce_field('wd29_bridge_admin', '_wpnonce', true, false));
     echo '<p><strong>Webhook de cette boutique :</strong> <code>' . esc_html(rest_url('wd29-bridge/v1/webhook')) . '</code></p>';
     echo '<form method="post">'; wp_nonce_field('wd29_bridge_admin');
     echo '<p><label>Mode <select name="mode">';
