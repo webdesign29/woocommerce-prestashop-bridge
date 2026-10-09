@@ -2,16 +2,17 @@
 /**
  * Plugin Name: Inklura Sync
  * Description: Synchronisation WooCommerce ↔ PrestaShop : catalogue, stocks, commandes et clients.
- * Version: 0.6.5
+ * Version: 0.6.6
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
- * Author: Webdesign29
+ * Author: Inklura
+ * Author URI: https://plugins.inklura.fr
  * License: GPL-2.0-or-later
  * Text Domain: wd29-bridge
  */
 defined('ABSPATH') || exit;
-const WD29_BRIDGE_VERSION = '0.6.5';
+const WD29_BRIDGE_VERSION = '0.6.6';
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/Licence.php';
 require_once __DIR__ . '/includes/LicenceAdmin.php';
