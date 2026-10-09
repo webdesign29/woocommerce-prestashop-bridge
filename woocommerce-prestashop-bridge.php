@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: WD29 WooCommerce PrestaShop Bridge
- * Description: Direct signed webhooks, initial catalog reconciliation and durable synchronization with PrestaShop.
- * Version: 0.6.4
+ * Plugin Name: Inklura Sync
+ * Description: Synchronisation WooCommerce ↔ PrestaShop : catalogue, stocks, commandes et clients.
+ * Version: 0.6.5
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -11,7 +11,7 @@
  * Text Domain: wd29-bridge
  */
 defined('ABSPATH') || exit;
-const WD29_BRIDGE_VERSION = '0.6.4';
+const WD29_BRIDGE_VERSION = '0.6.5';
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/Licence.php';
 require_once __DIR__ . '/includes/LicenceAdmin.php';
@@ -111,7 +111,7 @@ add_action('rest_api_init', function () {
         },
     ]);
 });
-add_action('admin_menu', function () { add_submenu_page('woocommerce', 'PrestaShop Bridge', 'PrestaShop Bridge', 'manage_options', 'wd29-bridge', 'wd29_bridge_admin'); });
+add_action('admin_menu', function () { add_submenu_page('woocommerce', 'Inklura Sync', 'Inklura Sync', 'manage_options', 'wd29-bridge', 'wd29_bridge_admin'); });
 
 add_action('admin_post_wd29_sync_batch',function(){
     if(!current_user_can('manage_options')){wp_send_json(['ok'=>false,'error'=>'Accès refusé.'],403);}
