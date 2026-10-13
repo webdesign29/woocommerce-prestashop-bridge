@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Inklura Sync
  * Description: Synchronisation WooCommerce ↔ PrestaShop : catalogue, stocks, commandes et clients.
- * Version: 0.7.1
+ * Version: 0.7.2
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -37,7 +37,7 @@ unset($wd29_other_connector);
 // Keep function declarations conditional too: PHP registers unconditional
 // declarations before an early return, which would collide with an older edition.
 if (!defined('WD29_BRIDGE_VERSION')) {
-define('WD29_BRIDGE_VERSION', '0.7.1');
+define('WD29_BRIDGE_VERSION', '0.7.2');
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/AdminInput.php';
 require_once __DIR__ . '/includes/Licence.php';
@@ -140,7 +140,9 @@ foreach (['new_order','cancelled_order','failed_order','customer_on_hold_order',
         return wd29_bridge()->orderApplying || ($order instanceof \WC_Order && $order->get_meta('_wd29_bridge_origin')) ? false : $enabled;
     }, 100, 2);
 }
-/** Authenticate the exact request body before decoding or dispatching it. */
+/** Authenticate the exact request body before decoding or dispatching it.
+ * @return true|WP_Error WordPress rejects the request when authentication fails.
+ */
 function wd29_bridge_webhook_permission($request) {
     try {
         \WD29\Bridge\Protocol::verify($request->get_body(), wd29_bridge()->config()['secret'] ?? '', [
@@ -150,7 +152,7 @@ function wd29_bridge_webhook_permission($request) {
         ]);
         return true;
     } catch (\Throwable $error) {
-        return new \WP_Error('bridge_auth', 'Invalid signed request.', ['status' => 401]);
+        return new WP_Error('bridge_auth', 'Invalid signed request.', ['status' => 401]);
     }
 }
 add_action('rest_api_init', function () {

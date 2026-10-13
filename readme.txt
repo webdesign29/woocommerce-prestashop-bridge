@@ -4,7 +4,7 @@ Requires at least: 6.5
 Tested up to: 7.1.3
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 0.7.1
+Stable tag: 0.7.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -44,7 +44,7 @@ The direct-sale edition sends its license key, platform, local store URL, config
 
 == Changelog ==
 
-= 0.7.1 =
+= 0.7.2 =
 Added separate Woo Marketplace distribution, included PrestaShop companion, native Woo update ownership and subscription-independent installed synchronization. Direct-sale licensing and updates are preserved.
 
 = 0.6.7 =

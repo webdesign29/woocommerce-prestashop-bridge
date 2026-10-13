@@ -1,5 +1,8 @@
 *** Inklura Sync Changelog ***
 
+2026-10-13 - version 0.7.2
+* Fixed - Make global WordPress error return recognizable to webhook permission security scans.
+
 2026-10-13 - version 0.7.1
 * Fixed - Validate admin form values and escape custom-field options.
 * Fixed - Explicit signed webhook permission callback.

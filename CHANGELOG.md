@@ -1,4 +1,8 @@
-## 0.7.1 (unreleased)
+## 0.7.2 (unreleased)
+
+- Reference the global WordPress WP_Error class in signed webhook authorization so static security checks recognize its accepted return type; authentication and HTTP 401 responses are unchanged.
+
+## 0.7.1 (Marketplace resubmission)
 
 - Validate admin input centrally without silently normalizing malformed identifiers; preserve opaque signing keys and validate custom-field schemas.
 - Escape custom-field option values at output and make signed webhook authorization an explicit named callback returning only true or WP_Error.
