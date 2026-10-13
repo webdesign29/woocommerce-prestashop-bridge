@@ -1,3 +1,9 @@
+## 0.7.0 (unreleased)
+
+- Add an independently packaged Woo Marketplace edition and matching PrestaShop companion. The installed edition requires no additional Inklura key, never makes Inklura license requests, and keeps synchronization working when the Woo subscription expires. Woo manages updates and support.
+- Preserve direct-sale licensing, keys, settings, mappings and history. An administrator must deactivate the other WooCommerce edition before switching; uninstalling is not required.
+- Bundle the matching PrestaShop module and expose its download to authorized WordPress administrators with a nonce. Companion updates come from the current Woo connector package, avoiding a second update/billing channel.
+
 ## 0.6.7
 
 - Actions requises : quand un réglage ou une décision bloque la synchronisation (taux de TVA à confirmer, boutique prioritaire à choisir en cas de modification simultanée, conflits ou échecs à relancer, traitement automatique arrêté), un bandeau l’indique en haut de toutes les pages du connecteur, avec le bouton qui règle le point en un clic et le lien vers la page concernée.

@@ -1,0 +1,15 @@
+*** Inklura Sync Changelog ***
+
+2026-10-13 - version 0.7.0
+* Added - Woo Marketplace edition with a matching bundled PrestaShop companion.
+* Added - Local administrator download of the companion archive.
+* Changed - Marketplace updates and support are managed through WooCommerce.com.
+* Changed - Marketplace synchronization does not require an Inklura key and continues after subscription expiry.
+* Fixed - Preserve stored direct-sale licenses and avoid competing update channels when switching editions.
+* Added - Build-time distribution selection; direct-sale licensing and updates remain unchanged.
+
+2026-10-09 - version 0.6.7
+* Added - Required-action notices and explicit tax confirmation.
+* Fixed - Requeue blocked events after settings are resolved without consuming retries.
+* Added - Signed catalog conflict policy synchronization between partner stores.
+* Fixed - Preserve other configuration values when saving WordPress settings.

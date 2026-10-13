@@ -2,21 +2,47 @@
 /**
  * Plugin Name: Inklura Sync
  * Description: Synchronisation WooCommerce ↔ PrestaShop : catalogue, stocks, commandes et clients.
- * Version: 0.6.7
+ * Version: 0.7.0
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
  * Author: Inklura
  * Author URI: https://plugins.inklura.fr
+ * Plugin URI: https://plugins.inklura.fr/bridge-woocommerce-prestashop
+ * Developer: Inklura
+ * Developer URI: https://plugins.inklura.fr
+ * WC tested up to: 11.2.1
  * License: GPL-2.0-or-later
  * Text Domain: wd29-bridge
  */
 defined('ABSPATH') || exit;
-const WD29_BRIDGE_VERSION = '0.6.7';
+// Only one distribution may bootstrap the shared engine. Switching editions
+// requires deactivation, not uninstalling or removing any settings or history.
+$wd29_other_connector = basename(__FILE__) === 'inklura-sync.php'
+    ? 'woocommerce-prestashop-bridge/woocommerce-prestashop-bridge.php'
+    : 'inklura-sync/inklura-sync.php';
+if (defined('WD29_BRIDGE_VERSION') || in_array($wd29_other_connector, (array) get_option('active_plugins', []), true)
+    || isset(((array) get_site_option('active_sitewide_plugins', []))[$wd29_other_connector])) {
+    register_activation_hook(__FILE__, function () {
+        wp_die('Deactivate the other Inklura Sync edition before activating this one. Do not uninstall it: your settings and synchronization history will be reused.');
+    });
+    add_action('admin_notices', function () {
+        if (current_user_can('activate_plugins')) {
+            echo '<div class="notice notice-error"><p>' . esc_html__('Only one Inklura Sync edition can be active. Deactivate the other edition before activating this one; do not uninstall it.', 'inklura-sync') . '</p></div>';
+        }
+    });
+    return;
+}
+unset($wd29_other_connector);
+// Keep function declarations conditional too: PHP registers unconditional
+// declarations before an early return, which would collide with an older edition.
+if (!defined('WD29_BRIDGE_VERSION')) {
+define('WD29_BRIDGE_VERSION', '0.7.0');
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/Licence.php';
 require_once __DIR__ . '/includes/LicenceAdmin.php';
 require_once __DIR__ . '/includes/Updater.php';
+require_once __DIR__ . '/includes/MarketplaceAdmin.php';
 require_once __DIR__ . '/includes/Engine.php';
 require_once __DIR__ . '/includes/ManualOrdersAdmin.php';
 require_once __DIR__ . '/includes/ManualRecordsAdmin.php';
@@ -33,6 +59,13 @@ require_once __DIR__ . '/includes/ActionsAdmin.php';
 require_once __DIR__ . '/includes/WooAdapter.php';
 require_once __DIR__ . '/includes/CustomFields.php';
 require_once __DIR__ . '/includes/CustomFieldsAdmin.php';
+// Both storage modes pass the native Woo integration suite. Synchronization
+// uses native order objects and does not customize the cart/checkout interface.
+add_action('before_woocommerce_init', function () {
+    if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+    }
+});
 
 function wd29_bridge(): \WD29\Bridge\Engine {
     static $engine;
@@ -47,6 +80,7 @@ function wd29_bridge(): \WD29\Bridge\Engine {
 \WD29\Bridge\RecordPanelAdmin::register(__FILE__);
 add_action('init', ['\WD29\Bridge\WooAdapter','registerSourceStatuses']);
 (new \WD29\Bridge\Updater('wd29_bridge', __FILE__))->register();
+\WD29\Bridge\MarketplaceAdmin::register();
 // One admin notice while live mode is paused or the grace period is running (reads one option).
 add_filter('plugin_action_links_' . plugin_basename(__FILE__), function ($links) {
     array_unshift($links, '<a href="' . esc_url(admin_url('admin.php?page=wd29-bridge')) . '">Réglages</a>');
@@ -250,7 +284,8 @@ function wd29_bridge_admin(): void {
     echo '</tbody></table>';
     $update = $engine->licence()->updateAvailable();
     echo \WD29\Bridge\LicenceAdmin::render($engine, wp_nonce_field('wd29_bridge_admin', '_wpnonce', true, false),
-        $update ? '<p>Version ' . esc_html($update) . ' disponible. <a href="' . esc_url(admin_url('plugins.php')) . '">Mettre à jour depuis Extensions</a>.</p>' : '');
+        \WD29\Bridge\Distribution::isMarketplace() ? \WD29\Bridge\MarketplaceAdmin::panel() :
+        ($update ? '<p>Version ' . esc_html($update) . ' disponible. <a href="' . esc_url(admin_url('plugins.php')) . '">Mettre à jour depuis Extensions</a>.</p>' : ''));
     echo '</div>';
     $html=ob_get_clean();$end=strrpos($html,'</div>');
     $panel=\WD29\Bridge\ManualRecordsAdmin::render($engine,wp_nonce_field('wd29_bridge_admin','_wpnonce',true,false),wp_unslash($_POST),admin_url('admin-post.php?action=wd29_sync_batch')).\WD29\Bridge\ManualOrdersAdmin::render($engine,wp_nonce_field('wd29_bridge_admin','_wpnonce',true,false),wp_unslash($_POST));
@@ -274,3 +309,4 @@ add_action('woocommerce_admin_process_product_object',function($product){
         $product->update_meta_data($field,$value);
     }
 });
+}

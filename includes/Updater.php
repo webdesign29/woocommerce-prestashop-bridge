@@ -1,6 +1,7 @@
 <?php
 /** WordPress update channel for the licensed plugin (plugins.inklura.fr). GPL-2.0-or-later. */
 namespace WD29\Bridge;
+require_once __DIR__ . '/Distribution.php';
 
 /**
  * - The manifest is fetched at most every 12 hours (1 hour after a failure), and only when
@@ -24,6 +25,7 @@ final class Updater
 
     public function register(): void
     {
+        if (Distribution::isMarketplace()) { return; }
         add_filter('pre_set_site_transient_update_plugins', [$this, 'inject']);
         add_filter('plugins_api', [$this, 'details'], 10, 3);
         add_filter('upgrader_pre_download', [$this, 'download'], 10, 3);
@@ -35,6 +37,7 @@ final class Updater
     /** @return array|null manifest, null when unavailable */
     public function manifest(bool $fresh = false): ?array
     {
+        if (Distribution::isMarketplace()) { return null; }
         if (!$fresh) {
             $cached = get_site_transient(self::CACHE);
             if (is_array($cached)) { return $cached['manifest'] ?? null; }
