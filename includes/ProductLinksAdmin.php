@@ -1,5 +1,6 @@
 <?php
 namespace WD29\Bridge;
+require_once __DIR__ . '/AdminInput.php';
 
 /** Native product sidebar; peer discovery happens only after the editor is visible. */
 final class ProductLinksAdmin
@@ -39,21 +40,22 @@ final class ProductLinksAdmin
         else { echo '<p><strong>PrestaShop</strong><br><span data-wd29-link-host></span></p>'; }
         if (!empty($local['key'])) {
             $origin = strpos((string) $local['key'], 'woo:') === 0 ? 'Original WooCommerce' : 'Copie importée depuis PrestaShop';
-            echo '<p class="description">' . esc_html($origin) . '</p>';
+            echo '<p class="wd29-record-description" style="font-size:13px;color:#646970">' . esc_html($origin) . '</p>';
         }
         echo '<p data-wd29-link-status role="status" aria-live="polite">' . esc_html($messages[$state] ?? $messages['unavailable']) . '</p>';
         echo '<p><a class="button" data-wd29-link-public hidden style="display:none" target="_blank" rel="noopener noreferrer">Voir sur PrestaShop ↗</a></p>';
         echo '<p><button type="button" class="button" data-wd29-link-retry hidden style="display:none">Vérifier le lien</button></p>';
-        echo '<noscript><p class="description">Activez JavaScript pour vérifier le lien vers la boutique partenaire.</p></noscript></div>';
+        echo '<noscript><p class="wd29-record-description" style="font-size:13px;color:#646970">Activez JavaScript pour vérifier le lien vers la boutique partenaire.</p></noscript></div>';
     }
 
     public static function ajax(): void
     {
         nocache_headers();
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+        if (AdminInput::text($_SERVER, 'REQUEST_METHOD') !== 'POST') {
             wp_send_json(['ok' => false, 'error' => 'Méthode non autorisée.'], 405); return;
         }
-        $raw = $_POST['product'] ?? null;
+        // phpcs:ignore WordPress.Security.NonceVerification -- Product ID determines the per-record nonce action; verification below precedes peer lookup.
+        $raw = AdminInput::text($_POST, 'product', null, 10);
         if (!is_scalar($raw) || !preg_match('/^[1-9][0-9]{0,9}$/D', (string) $raw)) {
             wp_send_json(['ok' => false, 'error' => 'Produit invalide.'], 400); return;
         }
@@ -61,8 +63,9 @@ final class ProductLinksAdmin
         if (!current_user_can('edit_post', $id)) {
             wp_send_json(['ok' => false, 'error' => 'Accès refusé.'], 403); return;
         }
-        $nonce = $_POST['nonce'] ?? null;
-        if (!is_string($nonce) || strlen($nonce) > 128 || !wp_verify_nonce(wp_unslash($nonce), 'wd29_product_link_' . $id)) {
+        // phpcs:ignore WordPress.Security.NonceVerification -- Value is verified immediately below with wp_verify_nonce before any peer lookup.
+        $nonce = AdminInput::text($_POST, 'nonce', null, 128);
+        if (!is_string($nonce) || strlen($nonce) > 128 || !wp_verify_nonce($nonce, 'wd29_product_link_' . $id)) {
             wp_send_json(['ok' => false, 'error' => 'Session expirée. Actualisez la page.'], 403); return;
         }
         if (get_post_type($id) !== 'product') {

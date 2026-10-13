@@ -69,6 +69,7 @@ check(isset($boxes['shop_order'],$boxes['woocommerce_page_wc-orders']),'Classic 
 check(!isset($hooks['wp_ajax_nopriv_wd29_record_tools']),'Anonymous action registered');
 foreach(['product','order','customer'] as $kind){
  ob_start();RecordPanelAdmin::render($kind,5);$html=ob_get_clean();check(strpos($html,'data-wd29-record-panel')!==false,'Native staff panel missing');
+ check(!preg_match('/class="(?:[^"]*\s)?description(?:\s[^"]*)?"/', $html),'Native refund description selector collision');
  check(request($kind)->status===200,'Compare rejected native permission');
  check(request($kind,['nonce'=>'bad'])->status===403,'CSRF accepted');
  check(request($kind,['nonce'=>['bad']])->status===403,'Array nonce accepted');
@@ -80,6 +81,9 @@ $caps['edit_shop_order']=false;check(request('order')->status===403,'Order permi
 $caps['list_users']=false;check(request('customer')->status===403,'Customer self-profile permission bypass');$caps['list_users']=true;
 $caps['edit_user']=false;check(request('customer')->status===403,'Customer edit permission bypass');$caps['edit_user']=true;
 check(request('product',[],'GET')->status===405,'GET accepted');check(request('product',['id'=>['5']])->status===400,'Array ID accepted');
+foreach (['-5','05','5<script>','5%00','5\n',true] as $bad) { check(request('product',['id'=>$bad])->status===400,'Malformed ID was normalized'); }
+check(request('<b>product</b>')->status===400,'Injected kind normalized');
+check(request('product',['op'=>'<b>compare</b>'])->status===400,'Injected operation normalized');
 $mutation=['op'=>'sync','key'=>'woo:product:5','direction'=>'out','hash'=>str_repeat('a',64),'destination'=>'','confirm'=>'1'];
 check(request('product',$mutation)->payload['data']['state']==='applied','Explicit mutation failed');
 check(WD29\Bridge\RecordPanel::$input['destination']==='','Missing-copy empty destination lost');

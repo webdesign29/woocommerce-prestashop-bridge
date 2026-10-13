@@ -1,4 +1,12 @@
-## 0.7.0 (unreleased)
+## 0.7.1 (unreleased)
+
+- Validate admin input centrally without silently normalizing malformed identifiers; preserve opaque signing keys and validate custom-field schemas.
+- Escape custom-field option values at output and make signed webhook authorization an explicit named callback returning only true or WP_Error.
+- Bind SQL values to complete prepared templates, preserving NULL and literal percent signs.
+- Use scoped classes for connector editor notes so native Woo refund descriptions remain unambiguous.
+- Release cURL handles without the PHP 8.5 deprecated curl_close call.
+
+## 0.7.0 (Marketplace submission)
 
 - Add an independently packaged Woo Marketplace edition and matching PrestaShop companion. The installed edition requires no additional Inklura key, never makes Inklura license requests, and keeps synchronization working when the Woo subscription expires. Woo manages updates and support.
 - Preserve direct-sale licensing, keys, settings, mappings and history. An administrator must deactivate the other WooCommerce edition before switching; uninstalling is not required.

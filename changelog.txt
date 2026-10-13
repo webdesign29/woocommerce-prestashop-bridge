@@ -1,5 +1,12 @@
 *** Inklura Sync Changelog ***
 
+2026-10-13 - version 0.7.1
+* Fixed - Validate admin form values and escape custom-field options.
+* Fixed - Explicit signed webhook permission callback.
+* Fixed - Bind SQL values to complete prepared queries.
+* Fixed - Avoid collisions with Woo refund description selectors in native editor panels.
+* Fixed - Remove PHP 8.5 deprecated cURL handle closing calls.
+
 2026-10-13 - version 0.7.0
 * Added - Woo Marketplace edition with a matching bundled PrestaShop companion.
 * Added - Local administrator download of the companion archive.

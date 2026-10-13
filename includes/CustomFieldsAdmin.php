@@ -29,9 +29,9 @@ final class CustomFieldsAdmin
     {
         $prefix='field_rows['.$index.']';
         echo '<td><input aria-label="Nom d\'échange" name="'.esc_attr($prefix.'[id]').'" value="'.esc_attr($rule['id']).'"></td><td><select aria-label="Source du champ" name="'.esc_attr($prefix.'[source]').'">';
-        foreach (['meta'=>'Métadonnée Woo','acf'=>'ACF'] as $value=>$label) { echo '<option value="'.$value.'" '.selected($rule['source'],$value,false).'>'.$label.'</option>'; }
+        foreach (['meta'=>'Métadonnée Woo','acf'=>'ACF'] as $value=>$label) { echo '<option value="'.esc_attr($value).'" '.selected($rule['source'],$value,false).'>'.esc_html($label).'</option>'; }
         echo '</select></td><td><input aria-label="Clé locale" name="'.esc_attr($prefix.'[key]').'" value="'.esc_attr($rule['key']).'"></td><td>';
-        foreach (['product','variation','order','customer'] as $entity) { echo '<label style="display:inline-block;margin-right:10px"><input type="checkbox" name="'.esc_attr($prefix.'[entities][]').'" value="'.$entity.'" '.checked(in_array($entity,$rule['entities']??['product','variation'],true),true,false).'>'.esc_html(['product'=>'Produit','variation'=>'Déclinaison','order'=>'Commande','customer'=>'Client'][$entity]).'</label>'; }
+        foreach (['product','variation','order','customer'] as $entity) { echo '<label style="display:inline-block;margin-right:10px"><input type="checkbox" name="'.esc_attr($prefix.'[entities][]').'" value="'.esc_attr($entity).'" '.checked(in_array($entity,$rule['entities']??['product','variation'],true),true,false).'>'.esc_html(['product'=>'Produit','variation'=>'Déclinaison','order'=>'Commande','customer'=>'Client'][$entity]).'</label>'; }
         echo '</td><td><button type="button" class="button wd29-remove-field">Retirer</button></td>';
     }
 }
