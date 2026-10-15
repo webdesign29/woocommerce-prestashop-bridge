@@ -1,5 +1,9 @@
 *** Inklura Sync Changelog ***
 
+2026-10-15 - version 0.7.4
+* Fixed - Preserve native database mutation status while retrying fiscal events, preventing false HTTP 500 responses when deleting WooCommerce tax rates.
+* Added - Native REST tax CRUD coverage with empty and waiting queues in disabled, audit and live modes.
+
 2026-10-15 - version 0.7.3
 * Fixed - Clear native tax diagnostics and selectively retry imports after VAT settings change.
 * Fixed - Accept native whole-decimal inventory without rounding fractional stock.

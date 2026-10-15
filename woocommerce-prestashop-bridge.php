@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Inklura Sync
  * Description: Synchronisation WooCommerce ↔ PrestaShop : catalogue, stocks, commandes et clients.
- * Version: 0.7.3
+ * Version: 0.7.4
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -37,7 +37,7 @@ unset($wd29_other_connector);
 // Keep function declarations conditional too: PHP registers unconditional
 // declarations before an early return, which would collide with an older edition.
 if (!defined('WD29_BRIDGE_VERSION')) {
-define('WD29_BRIDGE_VERSION', '0.7.3');
+define('WD29_BRIDGE_VERSION', '0.7.4');
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/AdminInput.php';
 require_once __DIR__ . '/includes/Licence.php';
@@ -117,11 +117,27 @@ add_action('plugins_loaded', function () {
 }, 30);
 /** Native VAT changes unblock only tax-related failures, preserving other failures and conflicts. */
 function wd29_bridge_tax_settings_changed(): void {
-    wd29_bridge()->requeueSettingErrors([
-        'Destination taxes are disabled; confirm a tax mapping before importing taxed prices.',
-        'No matching WooCommerce tax class.',
-        'Display-only source price needs a confirmed tax mapping.',
-    ]);
+    global $wpdb;
+    // Woo's tax DELETE controller reads rows_affected after this hook. Queue queries must
+    // not replace the native mutation result (including when no retry rows are updated).
+    $native_rows = $wpdb->rows_affected;
+    $native_insert = $wpdb->insert_id;
+    $native_error = $wpdb->last_error;
+    try {
+        wd29_bridge()->requeueSettingErrors([
+            'Destination taxes are disabled; confirm a tax mapping before importing taxed prices.',
+            'No matching WooCommerce tax class.',
+            'Display-only source price needs a confirmed tax mapping.',
+        ]);
+    } catch (\Throwable $error) {
+        // Recovery is best effort; a bridge failure must not fail a native tax operation.
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Operational failure only; no payload, credentials or customer data.
+        error_log('Inklura Sync: fiscal retry deferred after a native tax settings change.');
+    } finally {
+        $wpdb->rows_affected = $native_rows;
+        $wpdb->insert_id = $native_insert;
+        $wpdb->last_error = $native_error;
+    }
 }
 function wd29_bridge_tax_option_changed($name): void {
     if (in_array($name, ['woocommerce_calc_taxes', 'woocommerce_prices_include_tax', 'woocommerce_default_country', 'woocommerce_store_city', 'woocommerce_store_postcode', 'woocommerce_tax_classes', 'woocommerce_tax_based_on'], true)) { wd29_bridge_tax_settings_changed(); }

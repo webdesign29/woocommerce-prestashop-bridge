@@ -4,7 +4,7 @@ Requires at least: 6.5
 Tested up to: 7.1.3
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 0.7.3
+Stable tag: 0.7.4
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -43,6 +43,9 @@ The Marketplace edition makes no Inklura license, entitlement or billing request
 The direct-sale edition sends its license key, platform, local store URL, configured partner URL and plugin version to https://plugins.inklura.fr for activation, daily verification and licensed updates. No synchronized catalog, order or customer records are sent to that license service.
 
 == Changelog ==
+
+= 0.7.4 =
+Preserve native tax CRUD status while retrying fiscal events; tax-rate deletion succeeds with empty and waiting queues.
 
 = 0.7.3 =
 Clear native tax diagnostics, selective recovery after VAT settings changes, whole-decimal inventory support, and concurrent independent product creation coverage.
