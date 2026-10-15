@@ -44,6 +44,9 @@ The direct-sale edition sends its license key, platform, local store URL, config
 
 == Changelog ==
 
+= 0.7.3 =
+Clear native tax diagnostics, selective recovery after VAT settings changes, whole-decimal inventory support, and concurrent independent product creation coverage.
+
 = 0.7.2 =
 Added separate Woo Marketplace distribution, included PrestaShop companion, native Woo update ownership and subscription-independent installed synchronization. Direct-sale licensing and updates are preserved.
 

@@ -16,6 +16,17 @@ for directory in ['includes']:
 main = (root / 'woocommerce-prestashop-bridge.php').read_text()
 version = re.search(r"Version: ([0-9.]+)|define\('WD29_WOOBRIDGE_VERSION', '([0-9.]+)'\)", main)
 version = version.group(1) or version.group(2)
+# Woo validates the first dated entry in changelog.txt, not WordPress readme headings.
+changelog = (root / 'changelog.txt').read_text()
+changelog_version = re.search(r'^\d{4}-\d{2}-\d{2} - version ([0-9.]+)\s*$', changelog, re.M)
+if not changelog.startswith('*** Inklura Sync Changelog ***') or not changelog_version or changelog_version.group(1) != version:
+    parser.error('changelog.txt must start with the Woo changelog header and a dated entry matching the plugin version')
+readme = (root / 'readme.txt').read_text()
+stable = re.search(r'^Stable tag: ([0-9.]+)\s*$', readme, re.M)
+readme_changelog = readme.split('== Changelog ==', 1)[-1]
+readme_version = re.search(r'^= ([0-9.]+) =\s*$', readme_changelog, re.M)
+if not stable or stable.group(1) != version or not readme_version or readme_version.group(1) != version:
+    parser.error('readme.txt stable tag and latest changelog must match the plugin version')
 companion_data = None
 if marketplace:
     if args.companion is None:
