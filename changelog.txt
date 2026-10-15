@@ -1,7 +1,9 @@
-= 0.7.3 =
-* Clear native tax diagnostics, selective retry after VAT changes, whole-decimal stock handling, and concurrent product creation coverage.
-
 *** Inklura Sync Changelog ***
+
+2026-10-15 - version 0.7.3
+* Fixed - Clear native tax diagnostics and selectively retry imports after VAT settings change.
+* Fixed - Accept native whole-decimal inventory without rounding fractional stock.
+* Added - Concurrent independent product creation and replay regression coverage.
 
 2026-10-13 - version 0.7.2
 * Fixed - Make global WordPress error return recognizable to webhook permission security scans.
