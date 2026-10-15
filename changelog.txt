@@ -1,3 +1,6 @@
+= 0.7.3 =
+* Clear native tax diagnostics, selective retry after VAT changes, whole-decimal stock handling, and concurrent product creation coverage.
+
 *** Inklura Sync Changelog ***
 
 2026-10-13 - version 0.7.2

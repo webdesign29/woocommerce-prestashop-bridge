@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Inklura Sync
  * Description: Synchronisation WooCommerce ↔ PrestaShop : catalogue, stocks, commandes et clients.
- * Version: 0.7.2
+ * Version: 0.7.3
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -37,7 +37,7 @@ unset($wd29_other_connector);
 // Keep function declarations conditional too: PHP registers unconditional
 // declarations before an early return, which would collide with an older edition.
 if (!defined('WD29_BRIDGE_VERSION')) {
-define('WD29_BRIDGE_VERSION', '0.7.2');
+define('WD29_BRIDGE_VERSION', '0.7.3');
 require_once __DIR__ . '/includes/Protocol.php';
 require_once __DIR__ . '/includes/AdminInput.php';
 require_once __DIR__ . '/includes/Licence.php';
@@ -115,6 +115,22 @@ add_filter('cron_schedules', function ($schedules) { $schedules['wd29_minute'] =
 add_action('plugins_loaded', function () {
     if (get_option('wd29_bridge_schema') !== '7') { wd29_bridge()->install(); update_option('wd29_bridge_schema','7',false); }
 }, 30);
+/** Native VAT changes unblock only tax-related failures, preserving other failures and conflicts. */
+function wd29_bridge_tax_settings_changed(): void {
+    wd29_bridge()->requeueSettingErrors([
+        'Destination taxes are disabled; confirm a tax mapping before importing taxed prices.',
+        'No matching WooCommerce tax class.',
+        'Display-only source price needs a confirmed tax mapping.',
+    ]);
+}
+function wd29_bridge_tax_option_changed($name): void {
+    if (in_array($name, ['woocommerce_calc_taxes', 'woocommerce_prices_include_tax', 'woocommerce_default_country', 'woocommerce_store_city', 'woocommerce_store_postcode', 'woocommerce_tax_classes', 'woocommerce_tax_based_on'], true)) { wd29_bridge_tax_settings_changed(); }
+}
+add_action('updated_option', 'wd29_bridge_tax_option_changed');
+add_action('added_option', 'wd29_bridge_tax_option_changed');
+foreach (['woocommerce_tax_rate_added', 'woocommerce_tax_rate_updated', 'woocommerce_tax_rate_deleted'] as $hook) {
+    add_action($hook, 'wd29_bridge_tax_settings_changed');
+}
 add_action('wd29_bridge_tick', function () { if (function_exists('wc_get_product')) { wd29_bridge()->tick(); } });
 function wd29_bridge_capture_later(string $kind, int $id): void {
     static $pending = [], $registered = false;
