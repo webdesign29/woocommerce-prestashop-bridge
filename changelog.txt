@@ -1,0 +1,28 @@
+= 0.7.3 =
+* Clear native tax diagnostics, selective retry after VAT changes, whole-decimal stock handling, and concurrent product creation coverage.
+
+*** Inklura Sync Changelog ***
+
+2026-10-13 - version 0.7.2
+* Fixed - Make global WordPress error return recognizable to webhook permission security scans.
+
+2026-10-13 - version 0.7.1
+* Fixed - Validate admin form values and escape custom-field options.
+* Fixed - Explicit signed webhook permission callback.
+* Fixed - Bind SQL values to complete prepared queries.
+* Fixed - Avoid collisions with Woo refund description selectors in native editor panels.
+* Fixed - Remove PHP 8.5 deprecated cURL handle closing calls.
+
+2026-10-13 - version 0.7.0
+* Added - Woo Marketplace edition with a matching bundled PrestaShop companion.
+* Added - Local administrator download of the companion archive.
+* Changed - Marketplace updates and support are managed through WooCommerce.com.
+* Changed - Marketplace synchronization does not require an Inklura key and continues after subscription expiry.
+* Fixed - Preserve stored direct-sale licenses and avoid competing update channels when switching editions.
+* Added - Build-time distribution selection; direct-sale licensing and updates remain unchanged.
+
+2026-10-09 - version 0.6.7
+* Added - Required-action notices and explicit tax confirmation.
+* Fixed - Requeue blocked events after settings are resolved without consuming retries.
+* Added - Signed catalog conflict policy synchronization between partner stores.
+* Fixed - Preserve other configuration values when saving WordPress settings.

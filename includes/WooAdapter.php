@@ -116,15 +116,30 @@ final class WooAdapter
     public function sql(string $query, array $args = [])
     {
         global $wpdb;
+        $select = preg_match('/^\s*SELECT/i', $query);
+        $parts = explode('?', $query);
+        if (count($parts) !== count($args) + 1) { throw new \LogicException('SQL parameter mismatch.'); }
         if ($args) {
-            $parts = explode('?', $query);
-            if (count($parts) !== count($args) + 1) { throw new \LogicException('SQL parameter mismatch.'); }
-            $query = array_shift($parts);
+            $template = str_replace('%', '%%', array_shift($parts));
+            $values = [];
             foreach ($args as $i => $value) {
-                $query .= ($value === null ? 'NULL' : $wpdb->prepare('%s', $value)) . $parts[$i];
+                $template .= ($value === null ? 'NULL' : '%s') . str_replace('%', '%%', $parts[$i]);
+                if ($value !== null) { $values[] = $value; }
             }
+            if ($values) {
+                // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Template consists only of internal SQL fragments plus generated placeholders; all external values are arguments.
+                $prepared = $wpdb->prepare($template, ...$values);
+                // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Entire query was prepared immediately above.
+                $result = $select ? $wpdb->get_results($prepared, ARRAY_A) : $wpdb->query($prepared);
+            } else {
+                $query = str_replace('%%', '%', $template);
+                // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Internal SQL template; every argument was the literal NULL, no external values remain.
+                $result = $select ? $wpdb->get_results($query, ARRAY_A) : $wpdb->query($query);
+            }
+        } else {
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Internal static SQL/DDL only; this branch rejects templates containing value placeholders.
+            $result = $select ? $wpdb->get_results($query, ARRAY_A) : $wpdb->query($query);
         }
-        $result = preg_match('/^\s*SELECT/i', $query) ? $wpdb->get_results($query, ARRAY_A) : $wpdb->query($query);
         if ($wpdb->last_error) { throw new \RuntimeException('Bridge database operation failed.'); }
         return $result;
     }

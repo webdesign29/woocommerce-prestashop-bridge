@@ -42,6 +42,7 @@ check(!isset($hooks['wp_ajax_nopriv_wd29_product_link']),'Unauthenticated handle
 ob_start();\WD29\Bridge\ProductLinksAdmin::render((object)['ID'=>1]);$html=ob_get_clean();
 check(\WD29\Bridge\ProductLinks::$localCalls===1&&\WD29\Bridge\ProductLinks::$remoteCalls===0,'Editor rendering queried the peer');
 check(strpos($html,'data-wd29-product-link')!==false&&strpos($html,'noopener noreferrer')!==false,'Native sidebar/public-link attributes missing');
+check(!preg_match('/class="(?:[^"]*\s)?description(?:\s[^"]*)?"/', $html),'Connector notes collide with native Woo refund descriptions');
 check(strpos($html,'Original WooCommerce')!==false,'Product origin missing');
 $valid=['product'=>'1','nonce'=>'valid-wd29_product_link_1'];
 $capable=false;check(request($valid)->status===403,'Unauthorised product edit accepted');
@@ -52,6 +53,7 @@ check(request(['product'=>'1','nonce'=>['x']])->status===403,'Array nonce accept
 check(request(['product'=>'1','nonce'=>'bad'])->status===403,'Invalid nonce accepted');
 check(request(['product'=>'2','nonce'=>$valid['nonce']])->status===403,'Other-product nonce accepted');
 $type='post';check(request($valid)->status===404,'Non-product lookup accepted');$type='product';
+foreach (['-1','01','1<script>','1%00','1\n',true] as $bad) { check(request(['product'=>$bad,'nonce'=>$valid['nonce']])->status===400,'Malformed product was normalized into an authorized ID'); }
 check(\WD29\Bridge\ProductLinks::$remoteCalls===0,'Rejected request queried peer');
 check(request($valid)->payload['data']['state']==='linked','Product editor capability alone should suffice without manage_options');
 \WD29\Bridge\ProductLinks::$throw=true;$reply=request($valid);check($reply->payload['data']['state']==='unavailable'&&strpos(json_encode($reply->payload),'SECRET')===false,'Transport error exposed');

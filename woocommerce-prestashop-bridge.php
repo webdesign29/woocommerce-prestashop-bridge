@@ -2,21 +2,48 @@
 /**
  * Plugin Name: Inklura Sync
  * Description: Synchronisation WooCommerce ↔ PrestaShop : catalogue, stocks, commandes et clients.
- * Version: 0.6.7
+ * Version: 0.7.3
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
  * Author: Inklura
  * Author URI: https://plugins.inklura.fr
+ * Plugin URI: https://plugins.inklura.fr/bridge-woocommerce-prestashop
+ * Developer: Inklura
+ * Developer URI: https://plugins.inklura.fr
+ * WC tested up to: 11.2.1
  * License: GPL-2.0-or-later
  * Text Domain: wd29-bridge
  */
 defined('ABSPATH') || exit;
-const WD29_BRIDGE_VERSION = '0.6.7';
+// Only one distribution may bootstrap the shared engine. Switching editions
+// requires deactivation, not uninstalling or removing any settings or history.
+$wd29_other_connector = basename(__FILE__) === 'inklura-sync.php'
+    ? 'woocommerce-prestashop-bridge/woocommerce-prestashop-bridge.php'
+    : 'inklura-sync/inklura-sync.php';
+if (defined('WD29_BRIDGE_VERSION') || in_array($wd29_other_connector, (array) get_option('active_plugins', []), true)
+    || isset(((array) get_site_option('active_sitewide_plugins', []))[$wd29_other_connector])) {
+    register_activation_hook(__FILE__, function () {
+        wp_die('Deactivate the other Inklura Sync edition before activating this one. Do not uninstall it: your settings and synchronization history will be reused.');
+    });
+    add_action('admin_notices', function () {
+        if (current_user_can('activate_plugins')) {
+            echo '<div class="notice notice-error"><p>' . esc_html__('Only one Inklura Sync edition can be active. Deactivate the other edition before activating this one; do not uninstall it.', 'inklura-sync') . '</p></div>';
+        }
+    });
+    return;
+}
+unset($wd29_other_connector);
+// Keep function declarations conditional too: PHP registers unconditional
+// declarations before an early return, which would collide with an older edition.
+if (!defined('WD29_BRIDGE_VERSION')) {
+define('WD29_BRIDGE_VERSION', '0.7.3');
 require_once __DIR__ . '/includes/Protocol.php';
+require_once __DIR__ . '/includes/AdminInput.php';
 require_once __DIR__ . '/includes/Licence.php';
 require_once __DIR__ . '/includes/LicenceAdmin.php';
 require_once __DIR__ . '/includes/Updater.php';
+require_once __DIR__ . '/includes/MarketplaceAdmin.php';
 require_once __DIR__ . '/includes/Engine.php';
 require_once __DIR__ . '/includes/ManualOrdersAdmin.php';
 require_once __DIR__ . '/includes/ManualRecordsAdmin.php';
@@ -33,6 +60,13 @@ require_once __DIR__ . '/includes/ActionsAdmin.php';
 require_once __DIR__ . '/includes/WooAdapter.php';
 require_once __DIR__ . '/includes/CustomFields.php';
 require_once __DIR__ . '/includes/CustomFieldsAdmin.php';
+// Both storage modes pass the native Woo integration suite. Synchronization
+// uses native order objects and does not customize the cart/checkout interface.
+add_action('before_woocommerce_init', function () {
+    if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+    }
+});
 
 function wd29_bridge(): \WD29\Bridge\Engine {
     static $engine;
@@ -47,13 +81,15 @@ function wd29_bridge(): \WD29\Bridge\Engine {
 \WD29\Bridge\RecordPanelAdmin::register(__FILE__);
 add_action('init', ['\WD29\Bridge\WooAdapter','registerSourceStatuses']);
 (new \WD29\Bridge\Updater('wd29_bridge', __FILE__))->register();
+\WD29\Bridge\MarketplaceAdmin::register();
 // One admin notice while live mode is paused or the grace period is running (reads one option).
 add_filter('plugin_action_links_' . plugin_basename(__FILE__), function ($links) {
     array_unshift($links, '<a href="' . esc_url(admin_url('admin.php?page=wd29-bridge')) . '">Réglages</a>');
     return $links;
 });
 add_action('admin_notices', function () {
-    if (!current_user_can('manage_options') || (($_GET['page'] ?? '') === 'wd29-bridge')) { return; }
+    // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only page selector for showing notices; no state change.
+    if (!current_user_can('manage_options') || (\WD29\Bridge\AdminInput::text($_GET, 'page', '') === 'wd29-bridge')) { return; }
     $engine = wd29_bridge();
     if (($engine->config()['mode'] ?? 'disabled') === 'disabled') { return; }
     $s = $engine->licence()->summary();
@@ -62,7 +98,9 @@ add_action('admin_notices', function () {
 });
 // Decisions or settings blocking synchronization, on every admin screen, with a link to the page that resolves them.
 add_action('admin_notices', function () {
-    if (!current_user_can('manage_options') || (($_GET['page'] ?? '') === 'wd29-bridge')) { return; }
+    // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only page selector for showing notices; no state change.
+    if (!current_user_can('manage_options') || (\WD29\Bridge\AdminInput::text($_GET, 'page', '') === 'wd29-bridge')) { return; }
+    // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Trusted form renderer escapes dynamic values at their HTML contexts; retains nonces and controls.
     echo \WD29\Bridge\ActionsAdmin::notice(wd29_bridge(), 'woo', function ($view) { return admin_url('admin.php?page=wd29-bridge&wd_view=' . rawurlencode($view)); });
 });
 add_filter('wc_order_statuses', ['\WD29\Bridge\WooAdapter','statusList']);
@@ -77,6 +115,22 @@ add_filter('cron_schedules', function ($schedules) { $schedules['wd29_minute'] =
 add_action('plugins_loaded', function () {
     if (get_option('wd29_bridge_schema') !== '7') { wd29_bridge()->install(); update_option('wd29_bridge_schema','7',false); }
 }, 30);
+/** Native VAT changes unblock only tax-related failures, preserving other failures and conflicts. */
+function wd29_bridge_tax_settings_changed(): void {
+    wd29_bridge()->requeueSettingErrors([
+        'Destination taxes are disabled; confirm a tax mapping before importing taxed prices.',
+        'No matching WooCommerce tax class.',
+        'Display-only source price needs a confirmed tax mapping.',
+    ]);
+}
+function wd29_bridge_tax_option_changed($name): void {
+    if (in_array($name, ['woocommerce_calc_taxes', 'woocommerce_prices_include_tax', 'woocommerce_default_country', 'woocommerce_store_city', 'woocommerce_store_postcode', 'woocommerce_tax_classes', 'woocommerce_tax_based_on'], true)) { wd29_bridge_tax_settings_changed(); }
+}
+add_action('updated_option', 'wd29_bridge_tax_option_changed');
+add_action('added_option', 'wd29_bridge_tax_option_changed');
+foreach (['woocommerce_tax_rate_added', 'woocommerce_tax_rate_updated', 'woocommerce_tax_rate_deleted'] as $hook) {
+    add_action($hook, 'wd29_bridge_tax_settings_changed');
+}
 add_action('wd29_bridge_tick', function () { if (function_exists('wc_get_product')) { wd29_bridge()->tick(); } });
 function wd29_bridge_capture_later(string $kind, int $id): void {
     static $pending = [], $registered = false;
@@ -102,16 +156,25 @@ foreach (['new_order','cancelled_order','failed_order','customer_on_hold_order',
         return wd29_bridge()->orderApplying || ($order instanceof \WC_Order && $order->get_meta('_wd29_bridge_origin')) ? false : $enabled;
     }, 100, 2);
 }
+/** Authenticate the exact request body before decoding or dispatching it.
+ * @return true|WP_Error WordPress rejects the request when authentication fails.
+ */
+function wd29_bridge_webhook_permission($request) {
+    try {
+        \WD29\Bridge\Protocol::verify($request->get_body(), wd29_bridge()->config()['secret'] ?? '', [
+            'timestamp' => $request->get_header('x-wd29-timestamp'),
+            'nonce' => $request->get_header('x-wd29-nonce'),
+            'signature' => $request->get_header('x-wd29-signature'),
+        ]);
+        return true;
+    } catch (\Throwable $error) {
+        return new WP_Error('bridge_auth', 'Invalid signed request.', ['status' => 401]);
+    }
+}
 add_action('rest_api_init', function () {
     register_rest_route('wd29-bridge/v1', '/webhook', [
         'methods' => 'POST',
-        'permission_callback' => function ($request) {
-            try {
-                \WD29\Bridge\Protocol::verify($request->get_body(), wd29_bridge()->config()['secret'] ?? '', [
-                    'timestamp' => $request->get_header('x-wd29-timestamp'), 'nonce' => $request->get_header('x-wd29-nonce'), 'signature' => $request->get_header('x-wd29-signature')]);
-                return true;
-            } catch (\Throwable $e) { return new \WP_Error('bridge_auth', 'Invalid signed request.', ['status' => 401]); }
-        },
+        'permission_callback' => 'wd29_bridge_webhook_permission',
         'callback' => function ($request) {
             try { return rest_ensure_response(wd29_bridge()->receive($request->get_json_params())); }
             catch (\Throwable $e) { return new \WP_Error('bridge_request', 'Request could not be processed.', ['status' => 400]); }
@@ -122,7 +185,7 @@ add_action('admin_menu', function () { add_submenu_page('woocommerce', 'Inklura 
 
 add_action('admin_post_wd29_sync_batch',function(){
     if(!current_user_can('manage_options')){wp_send_json(['ok'=>false,'error'=>'Accès refusé.'],403);}
-    if(($_SERVER['REQUEST_METHOD']??'')!=='POST'){wp_send_json(['ok'=>false,'error'=>'POST requis.'],405);}
+    if(\WD29\Bridge\AdminInput::text($_SERVER,'REQUEST_METHOD')!=='POST'){wp_send_json(['ok'=>false,'error'=>'POST requis.'],405);}
     check_admin_referer('wd29_bridge_admin');
     try{$result=\WD29\Bridge\ManualRecordsAdmin::batch(wd29_bridge(),wp_unslash($_POST));}
     catch(\Throwable $error){$result=['ok'=>false,'error'=>$error->getMessage()];}
@@ -133,14 +196,14 @@ function wd29_bridge_admin(): void {
     if (!current_user_can('manage_options')) { return; }
     $engine = wd29_bridge();
     $message = '';
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (\WD29\Bridge\AdminInput::text($_SERVER,'REQUEST_METHOD') === 'POST') {
         check_admin_referer('wd29_bridge_admin');
         try {
             $action = sanitize_key($_POST['bridge_action'] ?? '');
             $decisionMessage = \WD29\Bridge\ActionsAdmin::handle($engine, $action, wp_unslash($_POST));
             if ($decisionMessage !== null) { $message = $decisionMessage; $action = ''; }
             $recordMessage=$action===''?null:\WD29\Bridge\ManualRecordsAdmin::handle($engine,wp_unslash($_POST));
-            $licenceMessage = \WD29\Bridge\LicenceAdmin::handle($engine, $action, (string) wp_unslash($_POST['licence_key'] ?? ''));
+            $licenceMessage = \WD29\Bridge\LicenceAdmin::handle($engine, $action, \WD29\Bridge\AdminInput::opaque($_POST, 'licence_key', '', 4096));
             $manualMessage = \WD29\Bridge\ManualOrdersAdmin::handle($engine, wp_unslash($_POST));
             if ($action === '') {}
             elseif ($recordMessage !== null) { $message=$recordMessage; }
@@ -150,9 +213,9 @@ function wd29_bridge_admin(): void {
                 $config = $engine->config();
                 $mode = sanitize_key($_POST['mode'] ?? 'disabled');
                 if (!in_array($mode, ['disabled', 'audit', 'live'], true)) { throw new \RuntimeException('Mode invalide.'); }
-                $peer = trim(wp_unslash($_POST['peer'] ?? ''));
+                $peer = esc_url_raw(\WD29\Bridge\AdminInput::requiredText($_POST, 'peer'));
                 if ($peer !== '') { \WD29\Bridge\Protocol::publicEndpoint($peer); }
-                $secret = trim(wp_unslash($_POST['secret'] ?? ''));
+                $secret = trim(\WD29\Bridge\AdminInput::opaque($_POST, 'secret', '', 4096));
                 if ($secret !== '' && strlen($secret) < 32) { throw new \RuntimeException('Le secret partagé doit compter au moins 32 caractères.'); }
                 $policy = sanitize_key($_POST['conflict_policy'] ?? 'review');
                 if (!in_array($policy, ['review','woo','ps'], true)) { throw new \RuntimeException('Règle de conflit invalide.'); }
@@ -160,32 +223,32 @@ function wd29_bridge_admin(): void {
                 update_option('wd29_bridge_config', ['mode' => $mode, 'peer' => $peer, 'secret' => $secret !== '' ? $secret : ($config['secret'] ?? ''), 'conflict_policy' => $policy, 'native_customers'=>!empty($_POST['native_customers']), 'sync_gallery_removals'=>!empty($_POST['sync_gallery_removals'])] + $config, false);
                 $message = 'Réglages enregistrés.' . $engine->settingsChanged($config);
             } elseif ($action === 'restore_gallery') {
-                $engine->adapter->restoreGallery(trim(wp_unslash($_POST['gallery_record']??''))); $message='Images de galerie rattachées de nouveau ; produit capturé.';
+                $engine->adapter->restoreGallery((\WD29\Bridge\AdminInput::text($_POST, 'gallery_record', '') ?? '')); $message='Images de galerie rattachées de nouveau ; produit capturé.';
             } elseif ($action === 'save_field_rows') {
-                update_option('wd29_bridge_custom_fields', \WD29\Bridge\CustomFieldsAdmin::submitted(wp_unslash($_POST['field_rows']??[])),false);
+                update_option('wd29_bridge_custom_fields', \WD29\Bridge\CustomFieldsAdmin::submitted(\WD29\Bridge\AdminInput::rows($_POST, 'field_rows')),false);
                 $message='Correspondances des champs personnalisés enregistrées.';
             } elseif ($action === 'save_custom_fields') {
-                $rules=json_decode(wp_unslash($_POST['custom_fields']??'[]'),true,32,JSON_THROW_ON_ERROR);
+                $rules=json_decode(\WD29\Bridge\AdminInput::opaque($_POST, 'custom_fields', '[]'),true,32,JSON_THROW_ON_ERROR);
                 update_option('wd29_bridge_custom_fields', \WD29\Bridge\CustomFields::rules($rules),false);
                 $message='Liste des champs enregistrée. Capturez les catalogues pour synchroniser les champs choisis.';
             } elseif ($action === 'save_statuses') {
-                $mapping=[]; $submitted=wp_unslash($_POST['status_mapping']??[]);
+                $mapping=[]; $submitted=\WD29\Bridge\AdminInput::rows($_POST, 'status_mapping');
                 if (!is_array($submitted)) { throw new \RuntimeException('Correspondances de statuts invalides.'); }
                 foreach ((array)get_option('wd29_bridge_source_statuses',[]) as $key=>$label) {
-                    $target=(string)($submitted[$key]??$key);
+                    $target=\WD29\Bridge\AdminInput::requiredText($submitted,(string)$key,(string)$key);
                     if ($target!==$key && !in_array($target,['pending','on-hold','processing','completed','cancelled','refunded','failed'],true)) { throw new \RuntimeException('Statut de destination invalide.'); }
                     $mapping[$key]=$target;
                 }
                 update_option('wd29_bridge_status_mapping',$mapping,false);
                 $message='Correspondances de statuts enregistrées ; miroirs mis à jour : '.$engine->adapter->applyStatusMappings();
-            } elseif ($action === 'normalize_stock') { $message=wp_json_encode($engine->adapter->normalizeUnknownVariantStock(max(0,(int)($_POST['offset']??0)))); } elseif ($action === 'health') { $message = wp_json_encode($engine->peer(['op' => 'health'])); }
+            } elseif ($action === 'normalize_stock') { $message=wp_json_encode($engine->adapter->normalizeUnknownVariantStock(max(0,(int)(\WD29\Bridge\AdminInput::text($_POST, 'offset', '0') ?? '0')))); } elseif ($action === 'health') { $message = wp_json_encode($engine->peer(['op' => 'health'])); }
             elseif ($action === 'tick') { $engine->tick(); $message = 'File traitée : consultez le résultat ci-dessous.'; }
             elseif ($action === 'retry') { $engine->retry(); $message = 'Événements en échec remis en file.'; }
             elseif ($action === 'resolve_order_upgrades') { $message = 'Mises à jour de commandes équivalentes remises en file : ' . $engine->retryEquivalentOrderConflicts(); }
                 elseif ($action === 'resolve_catalog') { $engine->retryCatalogConflicts(); $message = 'Conflits de catalogue remis en file avec la priorité choisie.'; }
             elseif (in_array($action, ['seed_products','seed_orders','seed_customers'], true)) {
                 $kind = $action === 'seed_customers' ? 'customer' : ($action === 'seed_orders' ? 'order' : 'product');
-                $offset = max(0, (int) ($_POST['offset'] ?? 0));
+                $offset = max(0, (int) (\WD29\Bridge\AdminInput::text($_POST, 'offset', '0') ?? '0'));
                 $count = $engine->seed($kind, $offset);
                 $peer = $engine->peer(['op' => 'seed', 'kind' => $kind, 'offset' => $offset]);
                 $message = 'Lot capturé : ' . $count . ' sur WordPress, ' . $peer['count'] . ' sur PrestaShop. Offset suivant : ' . ($offset + 10);
@@ -197,6 +260,7 @@ function wd29_bridge_admin(): void {
     ob_start();
     echo '<div class="wrap"><h1>PrestaShop Bridge</h1><p>Connexion directe. En mode audit, les modifications reçues sont mises en file sans être appliquées. Chaque fiche garde son identité d\'origine ; une UGS vide ne sert jamais à rapprocher deux fiches.</p>';
     if ($message) { echo '<div class="notice notice-info"><p>' . esc_html($message) . '</p></div>'; }
+    // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Trusted form renderer escapes dynamic values at their HTML contexts; retains nonces and controls.
     echo \WD29\Bridge\ActionsAdmin::render($engine, 'woo', wp_nonce_field('wd29_bridge_admin', '_wpnonce', true, false));
     echo '<p><strong>Webhook de cette boutique :</strong> <code>' . esc_html(rest_url('wd29-bridge/v1/webhook')) . '</code></p>';
     echo '<form method="post">'; wp_nonce_field('wd29_bridge_admin');
@@ -226,11 +290,12 @@ function wd29_bridge_admin(): void {
     foreach ((array)get_option('wd29_bridge_source_statuses',[]) as $key=>$label) {
         echo '<p><label>'.esc_html($label).' <select name="status_mapping['.esc_attr($key).']">';
         foreach ([$key=>'Automatique (PrestaShop : '.$label,'pending'=>'Attente de paiement','on-hold'=>'En attente','processing'=>'En cours','completed'=>'Terminée','cancelled'=>'Annulée','refunded'=>'Remboursée','failed'=>'Échouée'] as $value=>$text) {
-            echo '<option value="'.esc_attr($value).'" '.selected($statusMappings[$key]??$key,$value,false).'>'.esc_html($text).'</option>';
+            echo '<option value="'.esc_attr($value).'" '.(($statusMappings[$key]??$key)===$value?' selected="selected"':'').'>'.esc_html($text).'</option>';
         }
         echo '</select></label></p>';
     }
     echo '<button class="button" name="bridge_action" value="save_statuses">Enregistrer les statuts</button>';
+    // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Trusted form renderer escapes dynamic values at their HTML contexts; retains nonces and controls.
     echo '</form>'.\WD29\Bridge\DiagnosticsAdmin::render($engine,$view).'<p>Dernier message enregistré (l\'état actuel est dans les diagnostics) : ' . esc_html(get_option('wd29_bridge_notice', '')) . '</p><h2>Journal des événements</h2><table class="widefat"><thead><tr>';
     foreach (['N°','Sens','Type','Identité','État','Essais','Erreur','Créé le'] as $heading) { echo '<th>' . esc_html($heading) . '</th>'; }
     echo '</tr></thead><tbody>';
@@ -249,12 +314,16 @@ function wd29_bridge_admin(): void {
     foreach (($view==='reports'?$engine->customerReport():[]) as $row) { echo '<tr>'; foreach ($row as $cell) { echo '<td>'.esc_html((string)$cell).'</td>'; } echo '</tr>'; }
     echo '</tbody></table>';
     $update = $engine->licence()->updateAvailable();
+    // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Trusted form renderer escapes dynamic values at their HTML contexts; retains nonces and controls.
     echo \WD29\Bridge\LicenceAdmin::render($engine, wp_nonce_field('wd29_bridge_admin', '_wpnonce', true, false),
-        $update ? '<p>Version ' . esc_html($update) . ' disponible. <a href="' . esc_url(admin_url('plugins.php')) . '">Mettre à jour depuis Extensions</a>.</p>' : '');
+        \WD29\Bridge\Distribution::isMarketplace() ? \WD29\Bridge\MarketplaceAdmin::panel() :
+        ($update ? '<p>Version ' . esc_html($update) . ' disponible. <a href="' . esc_url(admin_url('plugins.php')) . '">Mettre à jour depuis Extensions</a>.</p>' : ''));
     echo '</div>';
     $html=ob_get_clean();$end=strrpos($html,'</div>');
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Rendering only; POST mutation handlers above require check_admin_referer.
     $panel=\WD29\Bridge\ManualRecordsAdmin::render($engine,wp_nonce_field('wd29_bridge_admin','_wpnonce',true,false),wp_unslash($_POST),admin_url('admin-post.php?action=wd29_sync_batch')).\WD29\Bridge\ManualOrdersAdmin::render($engine,wp_nonce_field('wd29_bridge_admin','_wpnonce',true,false),wp_unslash($_POST));
     if($end!==false){$html=substr_replace($html,$panel,$end,0);}
+    // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Trusted form renderer escapes dynamic values at their HTML contexts; retains nonces and controls.
     echo \WD29\Bridge\AdminDesign::render($html, $engine, 'woo');
 }
 
@@ -267,10 +336,14 @@ add_action('woocommerce_product_options_general_product_data',function(){
 });
 add_action('woocommerce_admin_process_product_object',function($product){
     foreach (['_wd29_purchase_net','_wd29_supplier_name','_wd29_supplier_reference'] as $field) {
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Woo's product save handler verifies its nonce and edit capability before this hook.
         if (!isset($_POST[$field])) { continue; }
-        $value=sanitize_text_field(wp_unslash($_POST[$field]));
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Woo's product save handler verifies its nonce and edit capability before this hook.
+        $value=\WD29\Bridge\AdminInput::text($_POST,$field);
+        if ($value===null) { continue; }
         if ($field==='_wd29_purchase_net' && $value==='') { $product->delete_meta_data($field); continue; }
         if ($field==='_wd29_purchase_net' && (!is_numeric($value)||(float)$value<0)) { continue; }
         $product->update_meta_data($field,$value);
     }
 });
+}

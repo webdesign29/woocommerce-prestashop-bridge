@@ -1,3 +1,28 @@
+## 0.7.3
+
+- Les imports de produits bloqués par les taxes WooCommerce désactivées, une classe de TVA absente ou des prix source sans information fiscale affichent une action précise dans le tableau de bord et la supervision. Les liens ouvrent les vrais réglages WooCommerce concernés.
+- Les erreurs de configuration fiscale attendent la correction sans épuiser huit tentatives. La sauvegarde des options ou des taux de TVA WooCommerce remet uniquement les échanges fiscaux en attente ; les conflits et les autres échecs sont conservés. Une reprise horaire reste disponible si un changement échappe aux hooks.
+- Les stocks entiers écrits par WooCommerce sous forme décimale (par exemple « 3.000000 ») sont acceptés. Les fractions et les valeurs ambiguës restent refusées.
+- Tests de création simultanée : deux produits indépendants gardent leurs identités sur les deux boutiques, même avec le même identifiant numérique et sans référence. La priorité de catalogue ne fusionne pas ces produits. Réception signée, reprise fiscale, prix HT/TTC et rejeu validés dans WooCommerce natif.
+
+## 0.7.2 (unreleased)
+
+- Reference the global WordPress WP_Error class in signed webhook authorization so static security checks recognize its accepted return type; authentication and HTTP 401 responses are unchanged.
+
+## 0.7.1 (Marketplace resubmission)
+
+- Validate admin input centrally without silently normalizing malformed identifiers; preserve opaque signing keys and validate custom-field schemas.
+- Escape custom-field option values at output and make signed webhook authorization an explicit named callback returning only true or WP_Error.
+- Bind SQL values to complete prepared templates, preserving NULL and literal percent signs.
+- Use scoped classes for connector editor notes so native Woo refund descriptions remain unambiguous.
+- Release cURL handles without the PHP 8.5 deprecated curl_close call.
+
+## 0.7.0 (Marketplace submission)
+
+- Add an independently packaged Woo Marketplace edition and matching PrestaShop companion. The installed edition requires no additional Inklura key, never makes Inklura license requests, and keeps synchronization working when the Woo subscription expires. Woo manages updates and support.
+- Preserve direct-sale licensing, keys, settings, mappings and history. An administrator must deactivate the other WooCommerce edition before switching; uninstalling is not required.
+- Bundle the matching PrestaShop module and expose its download to authorized WordPress administrators with a nonce. Companion updates come from the current Woo connector package, avoiding a second update/billing channel.
+
 ## 0.6.7
 
 - Actions requises : quand un réglage ou une décision bloque la synchronisation (taux de TVA à confirmer, boutique prioritaire à choisir en cas de modification simultanée, conflits ou échecs à relancer, traitement automatique arrêté), un bandeau l’indique en haut de toutes les pages du connecteur, avec le bouton qui règle le point en un clic et le lien vers la page concernée.
