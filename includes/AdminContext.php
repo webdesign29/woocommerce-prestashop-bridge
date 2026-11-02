@@ -1,5 +1,6 @@
 <?php
 namespace WD29\Bridge;
+require_once __DIR__ . '/I18n.php';
 
 /** Read-only labels for the administration being viewed and record ownership. */
 final class AdminContext
@@ -10,10 +11,10 @@ final class AdminContext
     {
         $remote = $local === 'woo' ? 'ps' : 'woo';
         $urls = [$local => $engine->adapter->siteUrl(), $remote => $engine->config()['peer'] ?? ''];
-        $html = '<div class="wd-store-context" aria-label="Boutiques de cette connexion">';
+        $html = \WD29\Bridge\I18n::t('<div class="wd-store-context" aria-label="Stores in this connection">');
         foreach (['woo', 'ps'] as $side) {
-            $host = parse_url($urls[$side], PHP_URL_HOST) ?: 'Boutique partenaire non configurée';
-            $html .= '<div class="wd-store wd-side-'.$side.'" data-store-platform="'.$side.'" data-store-local="'.($side === $local ? 'true' : 'false').'"><span class="wd-store-role">'.($side === $local ? 'Vous êtes ici · cette administration' : 'Boutique partenaire configurée').'</span><strong>'.self::name($side).'</strong><span class="wd-store-host">'.self::e($host).'</span></div>';
+            $host = parse_url($urls[$side], PHP_URL_HOST) ?: \WD29\Bridge\I18n::t('Partner store not configured');
+            $html .= '<div class="wd-store wd-side-'.$side.'" data-store-platform="'.$side.'" data-store-local="'.($side === $local ? 'true' : 'false').'"><span class="wd-store-role">'.($side === $local ? \WD29\Bridge\I18n::t('You are here · this admin') : \WD29\Bridge\I18n::t('Configured partner store')).'</span><strong>'.self::name($side).'</strong><span class="wd-store-host">'.self::e($host).'</span></div>';
         }
         return $html.'</div>';
     }
@@ -24,13 +25,13 @@ final class AdminContext
         $heads = iterator_to_array($table->getElementsByTagName('th')); $identity = null; $localId = null; $direction = null;
         foreach ($heads as $i => $th) {
             $name = trim($th->textContent);
-            if (in_array($name, ['Origine','Identité','Client source','Commande'], true)) { $identity = $i; }
-            if ($name === 'Origine') { $th->textContent = 'Création de la fiche'; }
-            if ($name === 'ID local') { $localId = $i; $th->textContent = 'Fiche sur '.$localName; }
-            if ($name === 'Compte local (ID)') { $th->textContent = 'Compte sur '.$localName.' (ID)'; }
-            if ($name === 'Sens') { $direction = $i; $th->textContent = 'De → vers'; }
-            if ($name === 'Total / statut / lignes ici') { $th->textContent = 'Copie sur '.$localName; }
-            if ($name === 'Total / statut / lignes reçus') { $th->textContent = 'Version reçue de '.$remoteName; }
+            if (in_array($name, [\WD29\Bridge\I18n::t('Origin'),\WD29\Bridge\I18n::t('Identity'),\WD29\Bridge\I18n::t('Source customer'),\WD29\Bridge\I18n::t('Order')], true)) { $identity = $i; }
+            if ($name === \WD29\Bridge\I18n::t('Origin')) { $th->textContent = \WD29\Bridge\I18n::t('Record creation'); }
+            if ($name === \WD29\Bridge\I18n::t('Local ID')) { $localId = $i; $th->textContent = \WD29\Bridge\I18n::t('Record on ').$localName; }
+            if ($name === \WD29\Bridge\I18n::t('Local account (ID)')) { $th->textContent = \WD29\Bridge\I18n::t('Account on ').$localName.' (ID)'; }
+            if ($name === \WD29\Bridge\I18n::t('Direction')) { $direction = $i; $th->textContent = \WD29\Bridge\I18n::t('From → to'); }
+            if ($name === \WD29\Bridge\I18n::t('Local total / status / lines')) { $th->textContent = \WD29\Bridge\I18n::t('Copy on ').$localName; }
+            if ($name === \WD29\Bridge\I18n::t('Received total / status / lines')) { $th->textContent = \WD29\Bridge\I18n::t('Version received from ').$remoteName; }
         }
         foreach ($table->getElementsByTagName('tr') as $row) {
             $cells = iterator_to_array($row->getElementsByTagName('td')); if (!$cells) { continue; }
@@ -44,18 +45,18 @@ final class AdminContext
             $origin = $match[1]; $own = $origin === $local;
             $row->setAttribute('data-wd-origin', $own ? 'original' : 'imported');
             $cell = $cells[$identity]; $cell->textContent = '';
-            $badge = $doc->createElement('span'); $badge->setAttribute('class', 'wd-origin wd-side-'.$origin); $badge->textContent = 'Créé sur '.self::name($origin); $cell->appendChild($badge);
+            $badge = $doc->createElement('span'); $badge->setAttribute('class', 'wd-origin wd-side-'.$origin); $badge->textContent = \WD29\Bridge\I18n::t('Created on ').self::name($origin); $cell->appendChild($badge);
             $code = $doc->createElement('small'); $code->setAttribute('class', 'wd-record-key'); $code->textContent = $key; $cell->appendChild($code);
             if ($localId !== null && isset($cells[$localId])) {
                 $id = trim($cells[$localId]->textContent);
-                $cells[$localId]->textContent = ctype_digit($id) ? ($own ? 'Original' : 'Copie importée').' · #'.$id : 'Pas encore appliqué sur '.$localName;
+                $cells[$localId]->textContent = ctype_digit($id) ? ($own ? 'Original' : \WD29\Bridge\I18n::t('Imported copy')).' · #'.$id : \WD29\Bridge\I18n::t('Not yet applied on ').$localName;
             }
         }
-        if (!in_array($section, ['Catalogue','Commandes','Contacts clients'], true)) { return; }
+        if (!in_array($section, ['Catalogue',\WD29\Bridge\I18n::t('Orders'),\WD29\Bridge\I18n::t('Customer contacts')], true)) { return; }
         $table->setAttribute('data-wd-origin-table', 'true');
-        $label = $doc->createElement('label'); $label->setAttribute('class', 'wd-origin-filter'); $label->appendChild($doc->createTextNode('Afficher sur '.$localName.' : '));
+        $label = $doc->createElement('label'); $label->setAttribute('class', 'wd-origin-filter'); $label->appendChild($doc->createTextNode(\WD29\Bridge\I18n::t('Show on ').$localName.' : '));
         $select = $doc->createElement('select'); $select->setAttribute('data-wd-origin-filter', 'true');
-        foreach (['all'=>'Toutes les fiches suivies','original'=>'Originaux créés sur '.$localName,'imported'=>'Copies provenant de '.$remoteName] as $value=>$text) { $option=$doc->createElement('option');$option->setAttribute('value',$value);$option->textContent=$text;$select->appendChild($option); }
+        foreach (['all'=>\WD29\Bridge\I18n::t('All tracked records'),'original'=>\WD29\Bridge\I18n::t('Originals created on ').$localName,'imported'=>\WD29\Bridge\I18n::t('Copies from ').$remoteName] as $value=>$text) { $option=$doc->createElement('option');$option->setAttribute('value',$value);$option->textContent=$text;$select->appendChild($option); }
         $label->appendChild($select); $table->parentNode->insertBefore($label,$table);
     }
 }

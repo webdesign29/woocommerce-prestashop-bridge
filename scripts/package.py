@@ -3,6 +3,9 @@ from zipfile import ZipFile, ZIP_DEFLATED, ZipInfo
 import argparse
 import hashlib
 import re
+import os
+import subprocess
+from datetime import datetime, timezone
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--channel', choices=['direct', 'woo-marketplace'], default='direct')
@@ -10,7 +13,9 @@ parser.add_argument('--companion', type=Path)
 args = parser.parse_args()
 marketplace = args.channel == 'woo-marketplace'
 slug = 'inklura-sync' if marketplace else 'woocommerce-prestashop-bridge'
-files = [root / 'includes' / 'admin-design.css', root / 'includes' / 'admin-design.js', root / 'includes' / 'product-links.js', root / 'includes' / 'record-panel.js'] + [root / name for name in ['woocommerce-prestashop-bridge.php', 'README.md', 'CHANGELOG.md', 'LICENSE', 'OPERATIONS.md', 'ACCEPTANCE.md', 'SUPPLIERS.md', 'CUSTOM-FIELDS.md', 'GALLERY.md']]
+files = [root / 'includes' / 'admin-design.css', root / 'includes' / 'admin-design.js', root / 'includes' / 'product-links.js', root / 'includes' / 'record-panel.js'] + [root / name for name in ['woocommerce-prestashop-bridge.php', 'README.md', 'CHANGELOG.md', 'LICENSE', 'OPERATIONS.md', 'ACCEPTANCE.md', 'SUPPLIERS.md', 'CUSTOM-FIELDS.md', 'GALLERY.md', 'docs/KERAWEN-COMMERCE.md', 'docs/SHOPIFY.md', 'docs/MARKETPLACE-EDITION.md']]
+files += sorted((root / 'languages').glob('*'))
+files.append(root / 'includes' / 'i18n.js')
 for directory in ['includes']:
     files.extend(sorted((root / directory).rglob('*.php')))
 main = (root / 'woocommerce-prestashop-bridge.php').read_text()
@@ -47,9 +52,19 @@ elif args.companion is not None:
 files += [root / name for name in ['readme.txt', 'changelog.txt'] if (root / name).is_file()]
 output = root / 'dist' / (args.channel if marketplace else '') / (slug + '.zip' if marketplace else slug + '-' + version + '.zip')
 output.parent.mkdir(parents=True, exist_ok=True)
+# A fixed timestamp shared by different releases can leave PHP OPcache serving
+# the previous included files after a native module import. Releases keep a
+# reproducible commit timestamp; source-only builds may set SOURCE_DATE_EPOCH.
+release_epoch = os.environ.get('SOURCE_DATE_EPOCH')
+if release_epoch is None:
+    try:
+        release_epoch = subprocess.check_output(['git', 'log', '-1', '--format=%ct'], cwd=root, stderr=subprocess.DEVNULL).decode().strip()
+    except (OSError, subprocess.CalledProcessError):
+        release_epoch = str(int(max(file.stat().st_mtime for file in files)))
+release_time = datetime.fromtimestamp(int(release_epoch), timezone.utc).timetuple()[:6]
 with ZipFile(output, 'w', ZIP_DEFLATED) as archive:
     def add(relative, data):
-        info = ZipInfo(str(Path(slug) / relative), (2026, 10, 13, 0, 0, 0))
+        info = ZipInfo(str(Path(slug) / relative), release_time)
         info.compress_type = ZIP_DEFLATED
         info.external_attr = 0o100644 << 16
         archive.writestr(info, data)
@@ -64,7 +79,7 @@ with ZipFile(output, 'w', ZIP_DEFLATED) as archive:
             data = data.replace(b'Text Domain: wd29-bridge', b'Text Domain: inklura-sync')
             data = data.replace(b' * Requires at least: 6.5', b' * Requires at least: 7.0\n * WC requires at least: 11.2.1')
             data = data.replace(b'Plugin URI: https://plugins.inklura.fr/bridge-woocommerce-prestashop', b'Plugin URI: https://woocommerce.com/products/inklura-sync/')
-            data = data.replace('Description: Synchronisation WooCommerce ↔ PrestaShop : catalogue, stocks, commandes et clients.'.encode(), b'Description: Direct synchronization of products, stock, orders and customers between WooCommerce and PrestaShop.')
+            data = re.sub(rb'^ \* Description: .*$', b' * Description: Connect WooCommerce and PrestaShop, with an optional Shopify connection for products, stock, customers and order consultation.', data, count=1, flags=re.M)
         if marketplace and relative.name == 'readme.txt':
             data = data.replace(b'Requires at least: 6.5', b'Requires at least: 7.0')
         add(relative, data)

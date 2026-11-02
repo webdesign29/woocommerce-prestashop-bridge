@@ -1,6 +1,7 @@
 <?php
 /** Licence client for plugins.inklura.fr (protocol v1). Shared by both plugins. GPL-2.0-or-later. */
 namespace WD29\Bridge;
+require_once __DIR__ . '/I18n.php';
 require_once __DIR__ . '/Distribution.php';
 
 /**
@@ -68,7 +69,7 @@ final class Licence
             throw new \LogicException('The Woo Marketplace edition does not use an Inklura license key.');
         }
         $key = self::normalizeKey($raw);
-        if ($key === null) { throw new \InvalidArgumentException('Clé de licence invalide : format attendu WD29-XXXX-XXXX-XXXX-XXXX.'); }
+        if ($key === null) { throw new \InvalidArgumentException(\WD29\Bridge\I18n::t('Invalid license key: expected format WD29-XXXX-XXXX-XXXX-XXXX.')); }
         $state = $this->state();
         if (($state['key'] ?? '') !== '' && $state['key'] !== $key) {
             try { $this->call('deactivate', $state['key']); } catch (\Throwable $e) { /* best effort: the old seat can be freed from the customer area */ }
@@ -84,10 +85,10 @@ final class Licence
             return ['message' => 'Manage your subscription on WooCommerce.com. Existing Inklura keys are left unchanged.'] + $this->state();
         }
         $state = $this->state();
-        $message = 'Clé retirée de cette boutique.';
+        $message = \WD29\Bridge\I18n::t('Key removed from this store.');
         if (($state['key'] ?? '') !== '') {
             try { $payload = $this->call('deactivate', $state['key']); $message = (string) $payload['message']; }
-            catch (\Throwable $e) { $message = 'Clé retirée localement ; le serveur de licence est injoignable. Libérez la paire depuis votre espace client.'; }
+            catch (\Throwable $e) { $message = \WD29\Bridge\I18n::t('Key removed locally; license server unreachable. Release the pair in your customer account.'); }
         }
         $this->save(['unlicensed_since' => $state['unlicensed_since'] ?? time(), 'message' => $message]);
         return $this->state();
@@ -195,46 +196,46 @@ final class Licence
         $url = self::server() . '/api/licences/v1/' . $op;
         $response = $this->transport ? ($this->transport)($url, $fields) : self::post($url, $fields);
         if ($response['status'] === 429 || $response['status'] >= 500) {
-            throw new LicenceRetryLater('Serveur de licence indisponible (HTTP ' . $response['status'] . ').', (int) ($response['retry_after'] ?? 0));
+            throw new LicenceRetryLater(\WD29\Bridge\I18n::t('License server unavailable (HTTP ') . $response['status'] . ').', (int) ($response['retry_after'] ?? 0));
         }
-        if ($response['status'] !== 200) { throw new \RuntimeException('Réponse inattendue du serveur de licence (HTTP ' . $response['status'] . ').'); }
+        if ($response['status'] !== 200) { throw new \RuntimeException(\WD29\Bridge\I18n::t('Unexpected license server response (HTTP ') . $response['status'] . ').'); }
         return $this->verify($response['body'], self::host($fields['site_url']), self::hint($key), $now ?? time(), $lastIssued);
     }
 
     /** Verify a signed answer and bind it to this store, this key and a recent time. */
     public function verify(string $body, string $host, string $hint, int $now, ?string $lastIssued = null): array
     {
-        if (!function_exists('sodium_crypto_sign_verify_detached')) { throw new \RuntimeException('Extension PHP sodium absente : réponse de licence non vérifiable.'); }
+        if (!function_exists('sodium_crypto_sign_verify_detached')) { throw new \RuntimeException(\WD29\Bridge\I18n::t('PHP sodium extension missing: license response cannot be verified.')); }
         $data = json_decode($body, true, 16);
         $sig = is_array($data) ? base64_decode((string) ($data['sig'] ?? ''), true) : false;
         $json = is_array($data) ? (string) ($data['payload_json'] ?? '') : '';
         if ($sig === false || strlen($sig) !== SODIUM_CRYPTO_SIGN_BYTES || $json === ''
             || !sodium_crypto_sign_verify_detached($sig, $json, base64_decode($this->publicKey))) {
-            throw new \RuntimeException('Signature de licence invalide.');
+            throw new \RuntimeException(\WD29\Bridge\I18n::t('Invalid license signature.'));
         }
         $p = json_decode($json, true, 16);
         $issued = is_array($p) ? strtotime((string) ($p['issued_at'] ?? '')) : false;
         if (!is_array($p) || ($p['v'] ?? null) !== 1 || ($p['product'] ?? '') !== self::PRODUCT
             || !in_array($p['status'] ?? '', ['active', 'past_due', 'expired', 'revoked', 'invalid', 'seats_exhausted'], true)) {
-            throw new \RuntimeException('Réponse de licence non reconnue.');
+            throw new \RuntimeException(\WD29\Bridge\I18n::t('Unrecognized license response.'));
         }
-        if (($p['site_host'] ?? '') !== $host || ($p['key_hint'] ?? '') !== $hint) { throw new \RuntimeException('Réponse de licence destinée à une autre boutique ou une autre clé.'); }
-        if ($issued === false || abs($now - $issued) > self::MAX_CLOCK_SKEW) { throw new \RuntimeException('Réponse de licence périmée : vérifiez l\'horloge du serveur.'); }
-        if ($lastIssued !== null && ($last = strtotime($lastIssued)) !== false && $issued < $last) { throw new \RuntimeException('Réponse de licence plus ancienne que la dernière reçue.'); }
+        if (($p['site_host'] ?? '') !== $host || ($p['key_hint'] ?? '') !== $hint) { throw new \RuntimeException(\WD29\Bridge\I18n::t('License response belongs to another store or key.')); }
+        if ($issued === false || abs($now - $issued) > self::MAX_CLOCK_SKEW) { throw new \RuntimeException(\WD29\Bridge\I18n::t('License response expired: check the server clock.')); }
+        if ($lastIssued !== null && ($last = strtotime($lastIssued)) !== false && $issued < $last) { throw new \RuntimeException(\WD29\Bridge\I18n::t('License response is older than the last response received.')); }
         return $p;
     }
 
     public static function server(): string
     {
         $url = defined('WD29_BRIDGE_LICENCE_SERVER') ? (string) constant('WD29_BRIDGE_LICENCE_SERVER') : self::SERVER;
-        if (strpos($url, 'https://') !== 0) { throw new \RuntimeException('Licence server must use HTTPS.'); }
+        if (strpos($url, 'https://') !== 0) { throw new \RuntimeException(\WD29\Bridge\I18n::t('License server must use HTTPS.')); }
         return rtrim($url, '/');
     }
 
     /** Small bounded HTTPS POST: 4 s to connect, 8 s total, 64 KiB answer, no redirects. */
     public static function post(string $url, array $fields, int $timeout = 8): array
     {
-        if (!function_exists('curl_init')) { throw new \RuntimeException('Extension PHP curl absente.'); }
+        if (!function_exists('curl_init')) { throw new \RuntimeException(\WD29\Bridge\I18n::t('PHP cURL extension missing.')); }
         $body = ''; $retryAfter = 0;
         $curl = curl_init($url);
         curl_setopt_array($curl, [
@@ -256,7 +257,7 @@ final class Licence
         $ok = curl_exec($curl);
         $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
         unset($curl);
-        if ($ok === false) { throw new LicenceRetryLater('Serveur de licence injoignable.', 0); }
+        if ($ok === false) { throw new LicenceRetryLater(\WD29\Bridge\I18n::t('License server unreachable.'), 0); }
         return ['status' => $status, 'body' => $body, 'retry_after' => $retryAfter];
     }
 
@@ -289,15 +290,15 @@ final class Licence
         $now = $now ?? time();
         $s = $this->state();
         [$live, $reason] = $this->gate($now);
-        $labels = ['active' => 'Licence active', 'past_due' => 'Paiement en attente', 'expired' => 'Licence expirée', 'revoked' => 'Licence révoquée',
-            'invalid' => 'Clé inconnue', 'seats_exhausted' => 'Toutes les paires utilisées', 'missing' => 'Aucune clé', 'unverified' => 'Clé non vérifiée'];
+        $labels = ['active' => \WD29\Bridge\I18n::t('License active'), 'past_due' => \WD29\Bridge\I18n::t('Payment pending'), 'expired' => \WD29\Bridge\I18n::t('License expired'), 'revoked' => \WD29\Bridge\I18n::t('License revoked'),
+            'invalid' => \WD29\Bridge\I18n::t('Unknown key'), 'seats_exhausted' => \WD29\Bridge\I18n::t('All pairs in use'), 'missing' => \WD29\Bridge\I18n::t('No key'), 'unverified' => \WD29\Bridge\I18n::t('Unverified key')];
         $tone = in_array($reason, ['active', 'past_due'], true) ? 'ok' : ($live ? 'warn' : 'bad');
         $text = (string) ($s['message'] ?? '');
         if ($reason === 'missing' || $reason === 'unverified') {
-            $text = ($reason === 'missing' ? 'Saisissez votre clé de licence (espace client plugins.inklura.fr/compte). ' : 'La clé n\'a pas encore pu être vérifiée. ')
-                . ($live ? 'Sans clé vérifiée, le mode live reste possible jusqu\'au ' . gmdate('d/m/Y', $this->graceEnds()) . '.' : 'Le mode live est suspendu : la synchronisation fonctionne en mode audit.');
+            $text = ($reason === 'missing' ? \WD29\Bridge\I18n::t('Enter your license key (customer account at plugins.inklura.fr/compte). ') : \WD29\Bridge\I18n::t('The key could not be verified yet. '))
+                . ($live ? \WD29\Bridge\I18n::t('Without a verified key, live mode remains available until ') . gmdate('d/m/Y', $this->graceEnds()) . '.' : \WD29\Bridge\I18n::t('Live mode is paused: synchronization is running in audit mode.'));
         } elseif (!$live) {
-            $text .= ' Le mode live est suspendu : les événements sont reçus et conservés, rien n\'est perdu.';
+            $text .= \WD29\Bridge\I18n::t(' Live mode is paused: events are received and retained; nothing is lost.');
         }
         $label = $labels[$reason] ?? $reason;
         // Server messages often open with the same words as the label ("Licence active : …").

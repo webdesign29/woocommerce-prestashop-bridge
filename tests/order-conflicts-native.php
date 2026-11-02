@@ -1,5 +1,6 @@
 <?php
 /** Standalone disposable Woo or PS native guard regression; no map truncation. */
+$_SERVER['REQUEST_METHOD']=$_SERVER['REQUEST_METHOD']??'GET';
 $woo=getenv('WD29_WP_ROOT'); $ps=getenv('WD29_PS_ROOT');
 if ($woo) {
  require $woo.'/wp-load.php';
@@ -12,6 +13,7 @@ if ($woo) {
  require_once $ps.'/app/AppKernel.php'; $kernel=new AppKernel('prod',false); $kernel->boot();
  $e=Module::getInstanceByName('wd29woobridge')->bridge(); $site='ps';
 } else { throw new RuntimeException('Set disposable WP or PS fixture root.'); }
+set_exception_handler(static function(Throwable $error){fwrite(STDERR,$error->getMessage().PHP_EOL);exit(1);});
 require __DIR__.'/order-conflicts.php';
 $a=$e->adapter; $old=$e->config(); $config=$old; $config['mode']='off';
 if ($woo) { update_option('wd29_bridge_config',$config); $oldFields=get_option('wd29_bridge_custom_fields',[]); update_option('wd29_bridge_custom_fields',[]); }
@@ -32,7 +34,7 @@ try {
   $changed(static function() use($id) { $o=wc_get_order($id); $o->set_total('25'); $o->save(); },static function() use($id) { $o=wc_get_order($id); $o->set_total('24'); $o->save(); },'Hidden native Woo total change accepted');
   $line=array_values(wc_get_order($id)->get_items())[0]; $lineId=$line->get_id();
   $changed(static function() use($lineId) { $line=new WC_Order_Item_Product($lineId); $line->set_quantity(2); $line->save(); },static function() use($lineId) { $line=new WC_Order_Item_Product($lineId); $line->set_quantity(1); $line->save(); },'Hidden native Woo quantity change accepted');
-  $changed(static function() use($lineId) { $line=new WC_Order_Item_Product($lineId); $line->set_total('21'); $line->save(); },static function() use($lineId) { $line=new WC_Order_Item_Product($lineId); $line->set_total('20'); $line->save(); },'Hidden native Woo line money change accepted');
+  $changed(static function() use($lineId) { $line=new WC_Order_Item_Product($lineId); $line->set_total('21'); $line->save(); },static function() use($lineId) { $line=new WC_Order_Item_Product($lineId); $line->set_subtotal('20'); $line->set_total('20'); $line->save(); },'Hidden native Woo line money change accepted');
   $changed(static function() use($id) { $o=wc_get_order($id); $o->set_billing_city('Changed'); $o->save(); },static function() use($id) { $o=wc_get_order($id); $o->set_billing_city('Brest'); $o->save(); },'Hidden native Woo address change accepted');
  } else {
   $changed(static function() use($id) { $o=new Order($id); $o->total_paid_tax_incl=25; $o->save(); },static function() use($id) { $o=new Order($id); $o->total_paid_tax_incl=24; $o->save(); },'Hidden native PS total change accepted');

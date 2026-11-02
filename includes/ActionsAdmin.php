@@ -1,5 +1,6 @@
 <?php
 namespace WD29\Bridge;
+require_once __DIR__ . '/I18n.php';
 require_once __DIR__ . '/AdminDesign.php';
 
 /** Decisions and settings blocking synchronization: banner with one-click fixes, host-admin notice and handlers. */
@@ -14,11 +15,11 @@ final class ActionsAdmin
         if (!$actions) { return ''; }
         $error = false; foreach ($actions as $action) { $error = $error || $action['severity'] === 'error'; }
         $class = $platform === 'ps' ? 'alert alert-' . ($error ? 'danger' : 'warning') : 'notice notice-' . ($error ? 'error' : 'warning');
-        $html = '<div id="wd-actions" class="' . $class . ' wd-actions"><p><strong>Inklura Sync : ' . count($actions) . ' action(s) requise(s) pour que la synchronisation continue.</strong></p>';
+        $html = '<div id="wd-actions" class="' . $class . ' wd-actions"><p><strong>Inklura Sync : ' . count($actions) . \WD29\Bridge\I18n::t(' action(s) required for synchronization to continue.</strong></p>');
         foreach ($actions as $action) {
             $html .= '<div class="wd-action" data-action-code="' . self::e($action['code']) . '"><p><strong>' . self::e($action['title']) . '.</strong> ' . self::e($action['text']) . '</p>';
             $form = self::form($action, $platform);
-            $link = '<a href="' . self::e(self::actionUrl($action, $platform, AdminDesign::viewUrl($action['view']))) . '">' . ($action['view'] === 'settings' ? 'Ouvrir les réglages' : 'Voir l’activité') . '</a>';
+            $link = '<a href="' . self::e(self::actionUrl($action, $platform, AdminDesign::viewUrl($action['view']))) . '">' . ($action['view'] === 'settings' ? \WD29\Bridge\I18n::t('Open settings') : \WD29\Bridge\I18n::t('View activity')) . '</a>';
             $html .= $form !== '' ? '<form method="post">' . $token . $form . ' ' . $link . '</form>' : '<p>' . $link . '</p>';
             $html .= '</div>';
         }
@@ -39,20 +40,20 @@ final class ActionsAdmin
         switch ($action['decision']) {
             case 'tax_rate':
                 $suggest = $action['suggest'] ?? null;
-                return '<label>Taux appliqué <input name="decision_tax_rate" inputmode="decimal" size="5" required style="display:inline-block;width:6em" value="' . self::e($suggest ?? '') . '"> %</label> '
-                    . '<label>Ces prix sont saisis <select name="decision_tax_basis" style="display:inline-block;width:auto"><option value="gross">TTC</option><option value="net">HT</option></select></label> '
-                    . ($suggest !== null ? '<small>Suggestion : ' . self::e($suggest) . ' %, taux le plus utilisé du catalogue.</small> ' : '')
-                    . '<button class="btn-primary button-primary" name="bridge_action" value="decide_tax_rate">Confirmer et relancer</button>';
+                return \WD29\Bridge\I18n::t('<label>Applied rate <input name="decision_tax_rate" inputmode="decimal" size="5" required style="display:inline-block;width:6em" value="') . self::e($suggest ?? '') . '"> %</label> '
+                    . \WD29\Bridge\I18n::t('<label>Ces prix sont saisis <select name="decision_tax_basis" style="display:inline-block;width:auto"><option value="gross">Incl. tax</option><option value="net">Excl. tax</option></select></label> ')
+                    . ($suggest !== null ? '<small>Suggestion : ' . self::e($suggest) . \WD29\Bridge\I18n::t(' %, most common catalogue rate.</small> ') : '')
+                    . \WD29\Bridge\I18n::t('<button class="btn-primary button-primary" name="bridge_action" value="decide_tax_rate">Confirm and retry</button>');
             case 'conflict_policy':
                 $out = '';
                 foreach ([$local, $local === 'ps' ? 'woo' : 'ps'] as $side) {
-                    $out .= '<button class="' . ($side === $local ? 'btn-primary button-primary' : '') . '" name="bridge_action" value="decide_policy_' . $side . '">Priorité à ' . self::e($side === 'ps' ? 'PrestaShop' : 'WooCommerce') . '</button> ';
+                    $out .= '<button class="' . ($side === $local ? 'btn-primary button-primary' : '') . '" name="bridge_action" value="decide_policy_' . $side . \WD29\Bridge\I18n::t('">Priority: ') . self::e($side === 'ps' ? 'PrestaShop' : 'WooCommerce') . '</button> ';
                 }
                 return $out;
             case 'resolve_catalog':
-                return '<button class="btn-primary button-primary" name="bridge_action" value="decide_resolve_catalog">Relancer les conflits</button>';
+                return \WD29\Bridge\I18n::t('<button class="btn-primary button-primary" name="bridge_action" value="decide_resolve_catalog">Retry conflicts</button>');
             case 'retry':
-                return '<button class="btn-primary button-primary" name="bridge_action" value="decide_retry">Relancer les échecs</button>';
+                return \WD29\Bridge\I18n::t('<button class="btn-primary button-primary" name="bridge_action" value="decide_retry">Retry failures</button>');
         }
         return '';
     }

@@ -1,8 +1,12 @@
+# Inklura Sync 0.8.12
+
+Shopify has an independent connection in **WooCommerce → Shopify Sync**, also linked from the main Sync navigation. See [Shopify setup and scope](docs/SHOPIFY.md) before enabling a store. This direct release is distributed through the licensed Inklura update feed. Install the PrestaShop 0.8.12 companion for a WooCommerce/PrestaShop pair; Marketplace distribution remains separate.
+
 # Inklura Sync pour WooCommerce
 
 Synchronisation directe **WooCommerce ↔ PrestaShop** : catalogue, stocks, commandes et contacts clients, avec webhooks signés et file d’attente persistante.
 
-**Version : 0.6.2.** Ce dépôt contient le plugin WooCommerce ; installez également le [plugin partenaire](https://github.com/webdesign29/prestashop-woocommerce-bridge).
+**Version WooCommerce : 0.8.12.** Ce dépôt contient le plugin WooCommerce ; la connexion PrestaShop utilise le [module partenaire](https://github.com/webdesign29/prestashop-woocommerce-bridge). Le connecteur Shopify fonctionne dans WooCommerce et ne remplace pas ce module.
 
 [Télécharger les archives](https://plugins.inklura.fr/compte) (licence requise) · [Guide d’installation](https://plugins.inklura.fr/docs/licence) · [Exploitation et planificateur](OPERATIONS.md) · [Tests et cas particuliers](ACCEPTANCE.md)
 
@@ -11,6 +15,12 @@ Synchronisation directe **WooCommerce ↔ PrestaShop** : catalogue, stocks, comm
 Les pages **Vue d’ensemble**, **Comparer & synchroniser**, **Activité**, **Rapports**, **Réglages** et **Licence & mises à jour** utilisent les composants natifs de la plateforme. L’en-tête distingue la boutique consultée et sa partenaire.
 
 La comparaison affiche les originaux et leurs copies, les écarts de produits, commandes et contacts, puis permet une synchronisation individuelle, par famille ou complète dans le sens choisi. Les protections natives des formulaires, les contrôles de conflits et les modes automatiques sont conservés.
+
+### Connexion Shopify
+
+Le lien **Shopify** ouvre une configuration et une file indépendantes. Les produits simples et variables, leurs prix et stocks à un emplacement, les coordonnées clients et l’adresse par défaut peuvent être synchronisés dans les deux sens. Les créations WooCommerce → Shopify sont explicites ou activées séparément ; les produits exportés commencent en brouillon. Les étiquettes, images et collections ont leurs propres options. La copie des photos natives à la première création Shopify s’active séparément (jusqu’à 20 images publiques) ; les galeries déjà liées sont conservées. Les commandes Shopify restent des copies de consultation WooCommerce, sans nouveau paiement, remboursement ou mouvement de stock et sans inscription comme vente WooCommerce dans le registre financier KerAwen.
+
+Les codes promotionnels ordinaires sans quota et la page de consultation des avantages KerAwen demandent des permissions Shopify supplémentaires et une activation séparée. Leur activation et validation réelles restent en attente sur la démo. Les cartes cadeaux, avoirs et points KerAwen ne sont pas utilisables au checkout Shopify. Les commandes et paiements Shopify réels restent à tester ; la boutique d’essai demande un abonnement avant d’accepter des commandes. [Configuration, permissions et limites](docs/SHOPIFY.md).
 
 ## Ce qui est synchronisé
 
@@ -37,9 +47,9 @@ Les contacts se modifient sur leur boutique d’origine. Les mots de passe, rôl
 
 ## Installation et mise en service
 
-Installez `woocommerce-prestashop-bridge-0.5.1.zip` depuis **Extensions → Ajouter une extension → Téléverser**. Ouvrez **WooCommerce → Inklura Sync** (`admin.php?page=wd29-bridge`).
+Installez l’archive WooCommerce de la version choisie depuis **Extensions → Ajouter une extension → Téléverser**. Ouvrez **WooCommerce → Inklura Sync** (`admin.php?page=wd29-bridge`). Pour Shopify, ouvrez ensuite **Shopify** ; son webhook et son secret sont indépendants de l’appairage PrestaShop.
 
-1. Installez les deux plugins de la même version.
+1. Installez les deux archives du lot direct 0.8.12 pour une paire WooCommerce/PrestaShop. La connexion Shopify se configure dans WooCommerce ; la distribution Marketplace reste distincte.
 2. Configurez une même clé aléatoire d’au moins 32 caractères dans les réglages privés des deux boutiques. Ne la placez jamais dans un dépôt, une capture ou une URL.
 3. Copiez le webhook affiché par chaque plugin dans le réglage de l’autre. Utilisez HTTPS, puis passez les deux boutiques en **audit** et lancez **Tester la connexion**.
 4. Vérifiez la fiscalité et la priorité du catalogue. La saisie des prix WooCommerce peut rester en **TTC**, avec une TVA correctement configurée. Une fiscalité manquante demande une base HT/TTC et un taux explicites ; le connecteur ne les devine pas.
@@ -57,7 +67,7 @@ Les rapports de catalogue, commandes et contacts concernent les fiches suivies p
 
 ## Rattraper une commande manuellement
 
-Mettez les deux plugins à jour en **0.5.0**, puis ouvrez **Commandes à synchroniser**. Choisissez **Comparer WordPress → PrestaShop** ou **Comparer PrestaShop → WordPress**. Le tableau distingue les commandes absentes, identiques, modifiées et en conflit, par lots de 20 ; utilisez **Suivant** pour parcourir les autres commandes.
+Ouvrez **Commandes à synchroniser**. Choisissez **Comparer WordPress → PrestaShop** ou **Comparer PrestaShop → WordPress**. Le tableau distingue les commandes absentes, identiques, modifiées et en conflit, par lots de 20 ; utilisez **Suivant** pour parcourir les autres commandes. Ces actions concernent la paire WooCommerce/PrestaShop ; les copies de consultation Shopify n’y deviennent pas des ventes WooCommerce.
 
 **Importer cette commande** ou **Envoyer cette commande** applique uniquement la commande choisie et ses coordonnées. Cela fonctionne aussi en mode arrêté ou audit, sans réactiver le suivi automatique ni importer tout le catalogue. Les brouillons de checkout sont exclus. La destination doit avoir une licence autorisant les écritures. Les changements intervenus après la comparaison et les modifications locales du miroir sont protégés : actualisez ou examinez le conflit avant de réessayer.
 
@@ -166,7 +176,7 @@ Pour les clients, le statut compare le répertoire privé Sync ; la création/mi
 
 **Ouvrir l’administration distante** ouvre la fiche correspondante après connexion sur le partenaire et vérification de vos droits. Il ne transfère ni session, ni mot de passe, ni jeton d’administration. Dans PrestaShop, ouvrez une fois l’administration après la mise à jour pour enregistrer son chemin natif.
 
-## Distribution channels (0.7.2, unreleased)
+## Distribution channels
 
 `includes/Distribution.php` fixes the channel at build time. The source and default archive remain `direct`; the Marketplace packager substitutes `woo-marketplace` in an independent copy. Stored configuration, a request parameter, a license key, or a transient never selects the distribution.
 
@@ -185,7 +195,7 @@ python3 scripts/package.py --channel woo-marketplace
 Then build the WooCommerce archive in its repository with the actual matching companion:
 
 ```sh
-python3 scripts/package.py --channel woo-marketplace --companion ../prestashop-woocommerce-bridge/dist/woo-marketplace/wd29woobridge-0.7.2.zip
+python3 scripts/package.py --channel woo-marketplace --companion /path/to/same-version-marketplace-companion.zip
 ```
 
 The Woo archive is `dist/woo-marketplace/inklura-sync.zip`, rooted at `inklura-sync/`, with `inklura-sync.php` as its main file. The PrestaShop archive retains its required `wd29woobridge/` folder. Packaging rejects a direct-sale companion or a version mismatch. Both packagers are deterministic and leave source files unchanged. `python3 scripts/package.py` still creates the direct-sale archive.
@@ -193,3 +203,7 @@ The Woo archive is `dist/woo-marketplace/inklura-sync.zip`, rooted at `inklura-s
 After extracting each Marketplace archive, run `php tests/marketplace-distribution.php /absolute/path/to/extracted/plugin`. In the Woo repository also run `php tests/marketplace-admin.php /absolute/path/to/inklura-sync` and `php tests/marketplace-bootstrap.php /absolute/path/to/inklura-sync/inklura-sync.php`. Run the existing direct-sale license, synchronization and admin regression checks too.
 
 The Woo build passed the native integration suite on WordPress 7.1.3 / WooCommerce 11.2.1 / PHP 8.3 using both legacy order storage and HPOS with compatibility synchronization disabled. HPOS compatibility is declared. The new Marketplace distribution requires WordPress 7.0+ and WooCommerce 11.2.1+; earlier combinations are not yet claimed. It does not customize the cart or checkout UI, so it does not declare a separate Cart/Checkout Blocks extension. Marketplace submission still requires English-default localization, managed QIT checks and Woo business/technical/UX approval. Existing French screens are explicitly disclosed.
+
+### KerAwen integration status
+
+Registered customer/order links and source account activation are synchronized. The optional Woo account view reads KerAwen points and account-bound vouchers directly. Commerce Pro supplies the separate opt-in shared-benefits and native checkout workflows; Sync transports their signed authority requests and source-order proofs. KerAwen remains the balance authority. These Woo/PrestaShop workflows do not enable Shopify checkout redemption. See [KerAwen integration status](docs/KERAWEN-COMMERCE.md).

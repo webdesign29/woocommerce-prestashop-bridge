@@ -23,7 +23,7 @@ foreach(['woo','ps'] as $side){
  \WD29\Bridge\DiagnosticsAdmin::render($engine,'overview');check($engine->diagnosticReads===1&&$engine->reportReads===0,'Overview reads hidden report records');
  \WD29\Bridge\DiagnosticsAdmin::render($engine,'reports');check($engine->diagnosticReads===1&&$engine->reportReads===2,'Reports also compute hidden diagnostics/conflicts');
 $other=$side==='woo'?'ps':'woo';
- $input='<div><h1>Sync</h1><form><input name="wd29_token" value="nonce-preserved"></form><h2>Catalogue</h2><table><tr><th>Origine</th><th>ID local</th><th>Nom</th></tr><tr><td>'.$side.':product:10</td><td>10</td><td>Original</td></tr><tr><td>'.$other.':product:20</td><td>30</td><td>Copy</td></tr></table><h2>Journal des événements</h2><table><tr><th>Sens</th><th>Identité</th></tr><tr><td>in</td><td>'.$other.':order:1</td></tr><tr><td>out</td><td>'.$side.':order:2</td></tr></table></div>';
+ $input='<div><h1>Sync</h1><form><input name="wd29_token" value="nonce-preserved"></form><h2>Catalogue</h2><table><tr><th>Origin</th><th>Local ID</th><th>Name</th></tr><tr><td>'.$side.':product:10</td><td>10</td><td>Original</td></tr><tr><td>'.$other.':product:20</td><td>30</td><td>Copy</td></tr></table><h2>Event log</h2><table><tr><th>Direction</th><th>Identity</th></tr><tr><td>in</td><td>'.$other.':order:1</td></tr><tr><td>out</td><td>'.$side.':order:2</td></tr></table></div>';
  $_GET=['wd_view'=>'settings','page'=>'wd29-bridge','token'=>'native-csrf-token'];$_POST=[];
  $html=\WD29\Bridge\AdminDesign::render($input,$engine,$side);$xp=document($html);
  check($xp->query('//*[@data-store-local="true" and @data-store-platform="'.$side.'"]')->length===1,'Wrong local platform');
@@ -35,7 +35,7 @@ $other=$side==='woo'?'ps':'woo';
  $_GET['wd_view']='reports';$reports=\WD29\Bridge\AdminDesign::render($input,$engine,$side);check(strpos($reports,'name="wd29_token"')===false,'Reports page contains settings form');
  $_GET['wd_view']='activity';$html=$reports.\WD29\Bridge\AdminDesign::render($input,$engine,$side);$xp=document($html);
  check($xp->query('//*[@data-wd-origin="original"]')->length===2&&$xp->query('//*[@data-wd-origin="imported"]')->length===2,'Ownership misclassified');
- check(strpos($html,'Copie importée · #30')!==false&&strpos($html,'Original · #10')!==false,'Local IDs ambiguous');
+ check(strpos($html,'Imported copy · #30')!==false&&strpos($html,'Original · #10')!==false,'Local IDs ambiguous');
  check($xp->query('//*[@data-wd-origin-filter]')->length===1,'Report origin filter missing');
  foreach(['in','out'] as $direction){
   $source=$direction==='out'?$side:$other;$target=$source==='woo'?'ps':'woo';

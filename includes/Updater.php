@@ -1,6 +1,7 @@
 <?php
 /** WordPress update channel for the licensed plugin (plugins.inklura.fr). GPL-2.0-or-later. */
 namespace WD29\Bridge;
+require_once __DIR__ . '/I18n.php';
 require_once __DIR__ . '/Distribution.php';
 
 /**
@@ -61,7 +62,7 @@ final class Updater
             'id' => self::SLUG, 'slug' => self::SLUG, 'plugin' => $this->file, 'new_version' => (string) $m['version'],
             'url' => (string) ($m['homepage'] ?? ''), 'tested' => (string) ($m['tested'] ?? ''), 'requires_php' => (string) ($m['requires_php'] ?? ''),
             'package' => !empty($m['package']) ? self::MARKER . rawurlencode((string) $m['version']) : '',
-            'upgrade_notice' => empty($m['package']) ? 'Licence active requise pour la mise à jour automatique (plugins.inklura.fr/compte).' : '',
+            'upgrade_notice' => empty($m['package']) ? \WD29\Bridge\I18n::t('An active license is required for automatic updates (plugins.inklura.fr/compte).') : '',
         ];
         if (version_compare((string) $m['version'], $installed, '>')) { $transient->response[$this->file] = $item; unset($transient->no_update[$this->file]); }
         else { $transient->no_update[$this->file] = $item; unset($transient->response[$this->file]); }
@@ -86,14 +87,14 @@ final class Updater
         if (!is_string($package) || strpos($package, self::MARKER) !== 0) { return $reply; }
         $m = $this->manifest(true);
         if (!$m || empty($m['package']) || !preg_match('/^[a-f0-9]{64}$/D', (string) ($m['sha256'] ?? ''))) {
-            return new \WP_Error('wd29_licence', 'Mise à jour indisponible : licence inactive ou serveur injoignable. Téléchargez l\'archive depuis plugins.inklura.fr/compte.');
+            return new \WP_Error('wd29_licence', \WD29\Bridge\I18n::t('Update unavailable: inactive license or server unreachable. Download the archive from plugins.inklura.fr/compte.'));
         }
-        if (strpos((string) $m['package'], Licence::server() . '/') !== 0) { return new \WP_Error('wd29_package', 'Adresse de paquet inattendue.'); }
+        if (strpos((string) $m['package'], Licence::server() . '/') !== 0) { return new \WP_Error('wd29_package', \WD29\Bridge\I18n::t('Unexpected package URL.')); }
         $file = download_url((string) $m['package'], 120);
         if (is_wp_error($file)) { return $file; }
         if (!hash_equals((string) $m['sha256'], (string) hash_file('sha256', $file))) {
             @unlink($file);
-            return new \WP_Error('wd29_checksum', 'Empreinte SHA-256 de l\'archive incorrecte : mise à jour annulée.');
+            return new \WP_Error('wd29_checksum', \WD29\Bridge\I18n::t('Archive SHA-256 mismatch: update cancelled.'));
         }
         return $file;
     }

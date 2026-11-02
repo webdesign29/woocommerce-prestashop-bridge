@@ -2,18 +2,18 @@
 'use strict';var root=document.getElementById('wd29-admin');if(!root)return;
 var destinations={'wd-tools':'activity','wd-reports':'reports','wd-settings':'settings','wd-licence':'licence','wd-orders-delta':'orders','wd-compare':'sync'};var desired=destinations[location.hash.slice(1)];if(desired&&desired!==root.dataset.wdView){var next=new URL(location.href);next.searchParams.set('wd_view',desired);next.searchParams.delete('inklura_demo_section');location.replace(next.href);return;}
 root.querySelectorAll('table').forEach(function(table){
- var rows=table.querySelectorAll('tr');if(rows.length<=1){var empty=document.createElement('p');empty.className='wd-empty';empty.textContent='Aucun élément à afficher pour le moment.';table.before(empty);table.hidden=true;return;}
- var wrap=document.createElement('div');wrap.className='wd-table-scroll';wrap.tabIndex=0;wrap.setAttribute('role','region');var section=table.closest('details');wrap.setAttribute('aria-label',section?section.querySelector('summary strong').textContent:'Tableau du connecteur');table.before(wrap);wrap.append(table);
+ var rows=table.querySelectorAll('tr');if(rows.length<=1){var empty=document.createElement('p');empty.className='wd-empty';empty.textContent=window.InkluraSyncI18n.t('No items to display yet.');table.before(empty);table.hidden=true;return;}
+ var wrap=document.createElement('div');wrap.className='wd-table-scroll';wrap.tabIndex=0;wrap.setAttribute('role','region');var section=table.closest('details');wrap.setAttribute('aria-label',section?section.querySelector('summary strong').textContent:window.InkluraSyncI18n.t('Connector table'));table.before(wrap);wrap.append(table);
  table.querySelectorAll('th').forEach(function(th){th.scope='col';});
- var heads=Array.from(table.querySelectorAll('tr:first-child th'));var state=heads.findIndex(function(h){return ['state','État'].includes(h.textContent.trim());});
+ var heads=Array.from(table.querySelectorAll('tr:first-child th'));var state=heads.findIndex(function(h){return ['state',window.InkluraSyncI18n.t('State')].includes(h.textContent.trim());});
  if(state>=0)Array.from(rows).slice(1).forEach(function(row){var cell=row.children[state];if(!cell)return;var value=cell.textContent.trim();var badge=document.createElement('span');badge.className='wd-state'+(['applied','delivered'].includes(value)?' wd-state-good':(['failed','conflict'].includes(value)?' wd-state-error':value==='pending'?' wd-state-warn':''));badge.textContent=value;cell.replaceChildren(badge);});
 });
 root.querySelectorAll('[data-wd-origin-filter]').forEach(function(select){
  var section=select.closest('details'),table=section.querySelector('[data-wd-origin-table]');if(!table||!table.closest('.wd-table-scroll'))return;
  var count=document.createElement('span');count.className='wd-filter-count';count.setAttribute('aria-live','polite');select.after(count);
  var rows=Array.from(table.querySelectorAll('tr[data-wd-origin]'));
- var empty=document.createElement('p');empty.className='wd-empty';empty.textContent='Aucune fiche de cette origine dans ce rapport.';empty.hidden=true;table.closest('.wd-table-scroll').after(empty);
- function filter(){var visible=0;rows.forEach(function(row){row.hidden=select.value!=='all'&&row.dataset.wdOrigin!==select.value;if(!row.hidden)visible++;});count.textContent=visible+' / '+rows.length+' fiches affichées';empty.hidden=visible!==0||rows.length===0;}
+ var empty=document.createElement('p');empty.className='wd-empty';empty.textContent=window.InkluraSyncI18n.t('No records from this origin in this report.');empty.hidden=true;table.closest('.wd-table-scroll').after(empty);
+ function filter(){var visible=0;rows.forEach(function(row){row.hidden=select.value!=='all'&&row.dataset.wdOrigin!==select.value;if(!row.hidden)visible++;});count.textContent=visible+' / '+rows.length+window.InkluraSyncI18n.t(' records displayed');empty.hidden=visible!==0||rows.length===0;}
  select.addEventListener('change',filter);filter();
 });
 var settings=root.querySelector('.wd-section-settings form');if(settings){
@@ -32,28 +32,28 @@ var running=false,stopping=false,lines=[],panel=root.querySelector('#wd-sync-pro
 if(panel){
  var state=panel.querySelector('[data-sync-status]'),log=panel.querySelector('[data-sync-log]'),stop=panel.querySelector('[data-sync-stop]');
  var nativeButton=root.classList.contains('wd-platform-ps')?'btn btn-default':'button button-secondary',nativePrimary=root.classList.contains('wd-platform-ps')?'btn btn-primary':'button button-primary';
- var dialog=document.createElement('dialog');dialog.className='wd-sync-confirm';dialog.innerHTML='<form method="dialog"><h2>Confirmer la synchronisation</h2><p data-confirm-label></p><p>Seules les fiches originales du sens choisi sont envoyées. Les conflits restent à examiner. Les modes automatiques sont conservés.</p><div><button value="cancel" class="'+nativeButton+'">Annuler</button><button value="confirm" class="'+nativePrimary+'">Synchroniser</button></div></form>';root.append(dialog);
+ var dialog=document.createElement('dialog');dialog.className='wd-sync-confirm';dialog.innerHTML=window.InkluraSyncI18n.t('<form method="dialog"><h2>Confirm synchronization</h2><p data-confirm-label></p><p>Only original records in the selected direction are sent. Conflicts remain for review. Automatic modes are retained.</p><div><button value="cancel" class="')+nativeButton+window.InkluraSyncI18n.t('">Cancel</button><button value="confirm" class="')+nativePrimary+window.InkluraSyncI18n.t('">Synchronize</button></div></form>');root.append(dialog);
  function append(message){lines.push(new Date().toISOString()+' '+message);if(lines.length>1000)lines.shift();log.textContent=lines.join('\n');log.scrollTop=log.scrollHeight;}
  function busy(value){running=value;root.querySelectorAll('[data-sync-start]').forEach(function(b){b.disabled=value;});root.querySelectorAll('.wd-compare-controls select,.wd-compare-controls button,button[value=manual_record_sync]').forEach(function(b){b.disabled=value;});stop.disabled=!value;panel.querySelector('progress').hidden=!value;}
- stop.onclick=function(){stopping=true;stop.disabled=true;state.textContent='Arrêt demandé : fin de la fiche en cours…';};
- panel.querySelector('[data-sync-copy]').onclick=async function(){var text='Inklura Sync — '+root.querySelector('h1').textContent+'\n'+state.textContent+'\n'+lines.join('\n');try{await navigator.clipboard.writeText(text);var copied=panel.querySelector('[data-sync-copy]');copied.textContent='Journal copié';setTimeout(function(){copied.textContent='Copier le journal';},2000);}catch(e){var area=document.createElement('textarea');area.value=text;panel.append(area);area.focus();area.select();}};
+ stop.onclick=function(){stopping=true;stop.disabled=true;state.textContent=window.InkluraSyncI18n.t('Stop requested: finishing the current record…');};
+ panel.querySelector('[data-sync-copy]').onclick=async function(){var text='Inklura Sync — '+root.querySelector('h1').textContent+'\n'+state.textContent+'\n'+lines.join('\n');try{await navigator.clipboard.writeText(text);var copied=panel.querySelector('[data-sync-copy]');copied.textContent=window.InkluraSyncI18n.t('Log copied');setTimeout(function(){copied.textContent=window.InkluraSyncI18n.t('Copy log');},2000);}catch(e){var area=document.createElement('textarea');area.value=text;panel.append(area);area.focus();area.select();}};
  window.addEventListener('beforeunload',function(e){if(running){e.preventDefault();e.returnValue='';}});
- var controls=root.querySelector('.wd-compare-controls');if(controls){controls.querySelectorAll('select').forEach(function(select){select.addEventListener('change',function(){root.querySelectorAll('[data-sync-start]').forEach(function(b){b.disabled=true;});var hint=root.querySelector('.wd-selection-hint');if(!hint){hint=document.createElement('p');hint.className='wd-selection-hint';hint.setAttribute('role','status');controls.after(hint);}hint.textContent='Actualisez la comparaison pour confirmer cette famille et ce sens.';});});}
+ var controls=root.querySelector('.wd-compare-controls');if(controls){controls.querySelectorAll('select').forEach(function(select){select.addEventListener('change',function(){root.querySelectorAll('[data-sync-start]').forEach(function(b){b.disabled=true;});var hint=root.querySelector('.wd-selection-hint');if(!hint){hint=document.createElement('p');hint.className='wd-selection-hint';hint.setAttribute('role','status');controls.after(hint);}hint.textContent=window.InkluraSyncI18n.t('Refresh the comparison to confirm this record type and direction.');});});}
  root.querySelectorAll('[data-full-sync]').forEach(function(form){var button=form.querySelector('[data-sync-start]');button.disabled=false;button.onclick=function(){if(running)return;dialog.querySelector('[data-confirm-label]').textContent=button.textContent;dialog.returnValue='';dialog.showModal();dialog.querySelector('button[value=cancel]').focus();dialog.onclose=function(){if(dialog.returnValue==='confirm')run(form,button.textContent);};};});
  async function run(form,label){
-  busy(true);stopping=false;lines=[];panel.hidden=false;panel.scrollIntoView({block:'nearest'});var cursor={family:0,offset:0,index:0},counts={applied:0,same:0,review:0};append(label);append('Catalogue, contacts et commandes selon la sélection ; quantités existantes conservées.');
+  busy(true);stopping=false;lines=[];panel.hidden=false;panel.scrollIntoView({block:'nearest'});var cursor={family:0,offset:0,index:0},counts={applied:0,same:0,review:0};append(label);append(window.InkluraSyncI18n.t('Catalogue, contacts and orders as selected; existing quantities retained.'));
   try{while(!stopping){
-   state.textContent=label+' · '+counts.applied+' appliquée(s), '+counts.same+' identique(s), '+counts.review+' à examiner';
+   state.textContent=label+' · '+counts.applied+window.InkluraSyncI18n.t(' applied, ')+counts.same+window.InkluraSyncI18n.t(' identical, ')+counts.review+window.InkluraSyncI18n.t(' to review');
    var data=new FormData(form);data.set('bridge_action','manual_records_batch');data.set('manual_family',cursor.family);data.set('manual_offset',cursor.offset);data.set('manual_index',cursor.index);
-   var response=await fetch(form.dataset.syncEndpoint||location.href,{method:'POST',body:data,credentials:'same-origin',headers:{'Accept':'application/json'}});var result;try{result=await response.json();}catch(e){throw new Error('Réponse indisponible ou session expirée. Rechargez puis relancez : les fiches déjà appliquées seront reconnues.');}
-   if(!response.ok||!result.ok)throw new Error(result.error||'Traitement indisponible.');
+   var response=await fetch(form.dataset.syncEndpoint||location.href,{method:'POST',body:data,credentials:'same-origin',headers:{'Accept':'application/json'}});var result;try{result=await response.json();}catch(e){throw new Error(window.InkluraSyncI18n.t('Response unavailable or session expired. Reload and restart: records already applied will be recognized.'));}
+   if(!response.ok||!result.ok)throw new Error(result.error||window.InkluraSyncI18n.t('Processing unavailable.'));
    var record=result.result;if(record.state==='applied')counts.applied++;else if(record.state==='same')counts.same++;else if(record.state!=='empty')counts.review++;
-   if(record.key)append(record.key+' · '+record.state+(record.error?' · '+record.error:'')+(record.ack==='pending'?' · confirmation source en attente':''));
-   if(result.done){state.textContent='Terminé · '+counts.applied+' appliquée(s), '+counts.same+' identique(s), '+counts.review+' à examiner. Actualisez la comparaison.';append(state.textContent);break;}
+   if(record.key)append(record.key+' · '+record.state+(record.error?' · '+record.error:'')+(record.ack==='pending'?window.InkluraSyncI18n.t(' · source confirmation pending'):''));
+   if(result.done){state.textContent=window.InkluraSyncI18n.t('Finished · ')+counts.applied+window.InkluraSyncI18n.t(' applied, ')+counts.same+window.InkluraSyncI18n.t(' identical, ')+counts.review+window.InkluraSyncI18n.t(' to review. Actualisez la comparaison.');append(state.textContent);break;}
    cursor=result.cursor;
   }
-  if(stopping){state.textContent='Arrêté · '+counts.applied+' appliquée(s), '+counts.same+' identique(s), '+counts.review+' à examiner.';append(state.textContent);}
-  }catch(e){state.textContent='Interrompu · '+e.message;append(state.textContent);}finally{busy(false);}
+  if(stopping){state.textContent=window.InkluraSyncI18n.t('Stopped · ')+counts.applied+window.InkluraSyncI18n.t(' applied, ')+counts.same+window.InkluraSyncI18n.t(' identical, ')+counts.review+window.InkluraSyncI18n.t(' to review.');append(state.textContent);}
+  }catch(e){state.textContent=window.InkluraSyncI18n.t('Interrupted · ')+e.message;append(state.textContent);}finally{busy(false);}
  }
 }
 })();

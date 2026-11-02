@@ -1,16 +1,19 @@
 === Inklura Sync ===
-Tags: inventory, synchronization, prestashop, orders
+Tags: inventory, synchronization, prestashop, shopify, orders
 Requires at least: 6.5
 Tested up to: 7.1.3
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 0.7.4
+Stable tag: 0.8.13
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Sync products, stock movements, orders and customer records directly between WooCommerce and PrestaShop.
+Connect WooCommerce and PrestaShop, with optional Shopify products, stock, customers and order consultation.
 
 == Description ==
+
+Shopify is available as a separate GraphQL Admin API connection with audit/live modes. Import products and customers, update linked records and stock in both directions, create simple/variable products and customers from WooCommerce, and retain Shopify order copies for consultation. One inventory location is selected explicitly. Payment/refund processing and Shopify wallets remain owned by Shopify; the KerAwen balance is not yet exposed to Shopify checkout.
+
 
 Inklura Sync pairs one WooCommerce store with one PrestaShop store. Signed HTTPS webhooks exchange selected commerce records directly. Audit mode lets administrators review pending changes before enabling live synchronization. Durable queues, retries and conflict reports support ongoing operation.
 
@@ -38,11 +41,73 @@ If switching from the direct-sale edition, deactivate that plugin before activat
 
 == External services and data ==
 
-The Marketplace edition makes no Inklura license, entitlement or billing requests. Commerce records are transmitted only to the explicitly configured partner store, using signed HTTPS messages. Native WooCommerce account/update services are handled by WooCommerce and its Update Manager.
+The Marketplace edition makes no Inklura license, entitlement or billing requests. The WooCommerce/PrestaShop pair sends selected commerce records to the explicitly configured partner using signed HTTPS messages. Native WooCommerce account/update services are handled by WooCommerce and its Update Manager.
+
+When the optional Shopify connection is enabled, selected product, inventory, customer, order and promotion data is exchanged with the configured STORE.myshopify.com Admin GraphQL API (version 2026-10). Client-credentials mode obtains access tokens from that store's /admin/oauth/access_token endpoint; Shopify sends signed webhooks to this site's receiver. Optional image imports download approved Shopify CDN images. Optional initial product photo export sends public URLs for this site’s native uploads to Shopify for retrieval; it preserves already-mapped galleries. Optional account consultation verifies Shopify's signed app-proxy requests and reads the linked customer's KerAwen benefits through Commerce Pro and the configured PrestaShop partner. It does not create a Shopify wallet or enable checkout spending. See https://plugins.inklura.fr/docs/shopify and docs/SHOPIFY.md for scopes and setup. Disabling the connection preserves mappings and queued history.
 
 The direct-sale edition sends its license key, platform, local store URL, configured partner URL and plugin version to https://plugins.inklura.fr for activation, daily verification and licensed updates. No synchronized catalog, order or customer records are sent to that license service.
 
 == Changelog ==
+
+= 0.8.13 =
+* English-default WooCommerce administration with French translations; coordinated Marketplace companion.
+
+= 0.8.12 =
+Coordinated direct release with PrestaShop 0.8.12, Shopify catalogue/customer/inventory/photo sync and Commerce Pro transport. Optional features remain individually configured.
+
+= 0.8.11 =
+* Reuse native photo attachments using Shopify product-image identities rather than media image-source IDs.
+
+= 0.8.10 =
+* Defer webhooks for our own unfinished product/customer creations to preserve the original native identity.
+
+= 0.8.9 =
+* Copy public native product photos on initial Shopify creation, preserving existing galleries and recovering lost responses.
+
+= 0.8.8 =
+* Open Shopify settings from the main Sync navigation and plugin actions.
+* Update Shopify setup, external-service disclosure and KerAwen integration scope.
+* Keep the Marketplace package description in English after direct-header changes.
+
+= 0.8.7 =
+* Show Shopify fulfillment, refund and transaction history as source consultation data.
+* Preserve physical/virtual shipping flags and guard unsupported gift-card, subscription and bundle products.
+
+= 0.8.6 =
+* Synchronize compatible unlimited promotion codes, hold incompatible entitlements and recover uncertain creation responses.
+* Add a signed customer-scoped Shopify page for read-only KerAwen benefits.
+
+= 0.8.5 =
+* Initialize tag baselines correctly for newly exported tagged products.
+* Defer media import when the worker cannot write the native upload directory.
+
+= 0.8.4 =
+* Upgrade unchanged legacy customer address baselines before accepting new edits.
+
+= 0.8.3 =
+* Create variable products with durable option identities and recover lost creation responses.
+* Add configurable default-address export, tag sync, additive Shopify image and collection imports.
+
+= 0.8.2 =
+* Match product update error fields and preserve taxable flags in both directions.
+
+
+= 0.8.1 =
+* Correct the live-verified Shopify inventory comparison contract.
+
+
+= 0.8.0 =
+* Add Shopify connection with its own queue, inventory retry protection and native WooCommerce records.
+
+
+= 0.7.11 =
+* Signed commerce transport for the optional Commerce Pro authority and verified source-order proofs.
+
+= 0.7.10 =
+* Preserve registered customer identity on orders; protect native mirror updates.
+
+= 0.7.5 =
+* Prevent stale outgoing catalogue snapshots from undoing accepted imports.
 
 = 0.7.4 =
 Preserve native tax CRUD status while retrying fiscal events; tax-rate deletion succeeds with empty and waiting queues.
@@ -55,3 +120,13 @@ Added separate Woo Marketplace distribution, included PrestaShop companion, nati
 
 = 0.6.7 =
 Added required-action notices and settings recovery for blocked synchronization.
+
+== Frequently Asked Questions ==
+
+= Does the WooCommerce Marketplace edition have a 400-product limit? =
+
+No. The Marketplace edition has no built-in product-count cap and needs no separate Inklura license key. The 400-product Essentiel offer belongs to the separate direct-sale plan. Report display limits and batch sizes do not cap synchronization.
+
+= Is the WooCommerce admin available in English? =
+
+Yes, from 0.8.13. English is the default and a French translation is bundled. Native shop content is kept in its original language.

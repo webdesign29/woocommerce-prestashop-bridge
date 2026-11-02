@@ -31,19 +31,19 @@ refuses(fn()=>WD29\Bridge\ActionsAdmin::handle($e,'decide_tax_rate',['decision_t
 check($a->saves===0,'Rejected decision saved settings');
 $m=WD29\Bridge\ActionsAdmin::handle($e,'decide_tax_rate',['decision_tax_rate'=>'20','decision_tax_basis'=>'gross']);
 check($a->conf['display_tax_rate']==='20'&&$a->conf['display_basis']==='gross'&&$a->conf['tax_rules']===['20'=>1],'Tax decision not saved or other settings lost');
-check(stripos($m,'2 échange(s) relancé(s)')!==false,'Blocked events not requeued: '.$m);
+check(stripos($m,'2 event(s) retried')!==false,'Blocked events not requeued: '.$m);
 $rows=$e->sql("SELECT state,attempts,next_try FROM {b}queue WHERE error=?",[$tax]);
 foreach($rows as $row)check($row['state']==='pending'&&(int)$row['attempts']===0&&(int)$row['next_try']===0,'Requeued event keeps its backoff');
 check(codes($e)===['conflict_policy_required'],'Tax action still shown after requeue');
 refuses(fn()=>$e->decide('conflict_policy',['policy'=>'review']),'Review offered as one-click decision');
 $m=WD29\Bridge\ActionsAdmin::handle($e,'decide_policy_ps',[]);
 check($a->conf['conflict_policy']==='ps'&&$a->conf['display_tax_rate']==='20','Policy not saved or tax setting lost');
-check(stripos($m,'conflits de catalogue relancés')!==false&&strpos($m,'appliquez la même priorité sur la boutique partenaire')!==false,'Policy follow-up missing: '.$m);
+check(stripos($m,'Catalogue conflicts retried')!==false&&strpos($m,'apply the same priority on the partner store')!==false,'Policy follow-up missing: '.$m);
 check($e->sql("SELECT state FROM {b}queue WHERE kind='product' AND error LIKE 'Both%'")[0]['state']==='pending','Conflict not retried');
 check(codes($e)===[],'Actions remain after decisions');
 // Settings form path: same follow-up without a one-click decision.
 event($e,'failed','product',$tax);$before=$a->conf;$a->conf['display_tax_rate']='5.5';
-check(strpos($e->settingsChanged($before),'1 échange(s) relancé(s)')!==false&&codes($e)===[],'Settings form does not requeue');
+check(strpos($e->settingsChanged($before),'1 event(s) retried')!==false&&codes($e)===[],'Settings form does not requeue');
 check($e->settingsChanged($a->conf)==='','Unchanged settings produce follow-up');
 // Remaining kinds: failed (other error), order conflicts, stale worker, conflicts waiting with a chosen policy.
 event($e,'failed','product','Peer timeout');event($e,'conflict','order','Both sites changed this record; review required.',0);event($e,'conflict','product','Both sites changed this record; review required.',0);

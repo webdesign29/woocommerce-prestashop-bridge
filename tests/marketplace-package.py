@@ -35,6 +35,7 @@ with TemporaryDirectory() as temporary:
         assert all(n.startswith('inklura-sync/') for n in archive.namelist()), 'Wrong top-level folder'
         assert archive.read('inklura-sync/companion/wd29woobridge.zip') == pairing.read_bytes(), 'Companion changed during assembly'
         assert b'Text Domain: inklura-sync' in archive.read('inklura-sync/inklura-sync.php')
+        assert b'Description: Connect WooCommerce and PrestaShop, with an optional Shopify connection' in archive.read('inklura-sync/inklura-sync.php'), 'Marketplace description was not translated after the Shopify header changed'
         changelog = archive.read('inklura-sync/changelog.txt').decode()
         assert changelog.startswith('*** Inklura Sync Changelog ***'), 'Wrong Woo changelog header'
         assert re.search(r'^\d{4}-\d{2}-\d{2} - version ([0-9.]+)\s*$', changelog, re.M).group(1) == version, 'Woo changelog version mismatch'
