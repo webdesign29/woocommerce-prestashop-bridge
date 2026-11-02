@@ -1,5 +1,6 @@
 <?php
 namespace WD29\Bridge;
+require_once __DIR__ . '/I18n.php';
 require_once __DIR__ . '/Distribution.php';
 require_once __DIR__.'/ManualOrders.php';
 require_once __DIR__.'/ManualRecords.php';
@@ -69,11 +70,11 @@ final class Engine
     public function validateSettings(string $mode, string $peer, string $secret): void
     {
         if ($mode !== 'disabled' && ($peer === '' || strlen($secret) < 32)) {
-            throw new \RuntimeException('Renseignez l\'adresse HTTPS du webhook partenaire et le secret partagé avant d\'activer la synchronisation.');
+            throw new \RuntimeException(\WD29\Bridge\I18n::t('Enter the partner HTTPS webhook URL and shared secret before enabling synchronization.'));
         }
         $previous = $this->config()['peer'] ?? '';
         if ($peer !== $previous && $previous !== '' && $this->sql('SELECT record_key FROM {b}map LIMIT 1')) {
-            throw new \RuntimeException('Cette boutique a déjà des correspondances avec un autre partenaire : changer de partenaire demande une migration de ses tables privées.');
+            throw new \RuntimeException(\WD29\Bridge\I18n::t('This store already has mappings to another partner: changing partners requires migration of its private tables.'));
         }
     }
 
@@ -237,6 +238,10 @@ final class Engine
     {
         if (($message['source'] ?? '') !== ($this->adapter->site() === 'woo' ? 'ps' : 'woo')) { throw new \RuntimeException('Peer platform mismatch.'); }
         $op = $message['op'] ?? '';
+        if ($op==='commerce_order' || $op==='commerce_finance') {
+            if (!function_exists('inklura_commerce_receive')) { throw new \RuntimeException('Commerce Pro is not available.'); }
+            return \inklura_commerce_receive($this,$message);
+        }
         if ($op === 'health') {
             return ['ok' => true, 'protocol' => Protocol::VERSION, 'platform' => $this->adapter->site(), 'mode' => $this->mode(), 'worker'=>$this->adapter->workerStatus(), 'diagnostics'=>$this->diagnostics()];
         }
@@ -287,8 +292,8 @@ final class Engine
         $ids = $this->adapter->ids($kind, $offset, 10);
         foreach ($ids as $id) {
             if ($kind==='order' && $this->mode()==='live') { $this->adapter->reconcileOrderLinks((int)$id); }
+            if ($kind==='order') { $key=$this->adapter->orderContact((int)$id); if ($key && strpos($key,$this->adapter->site().':')===0) { $this->capture('customer',$this->contactId($key)); } }
             $this->capture($kind, (int) $id);
-            if ($kind==='order') { $key=$this->adapter->orderContact((int)$id); if ($key) { $this->capture('customer',$this->contactId($key)); } }
         }
         return count($ids);
     }
@@ -308,7 +313,7 @@ final class Engine
         $workerOutcome='failed'; $this->adapter->workerStatus('running');
         try {
             // At most one bounded HTTPS call per day; a licence problem never stops the worker.
-            try { $this->licence()->maybeCheck(); } catch (\Throwable $error) { $this->adapter->notice('Licence check skipped: ' . $error->getMessage()); }
+            try { $this->licence()->maybeCheck(); } catch (\Throwable $error) { $this->adapter->notice(\WD29\Bridge\I18n::t('License check skipped: ') . $error->getMessage()); }
             $this->scanDeletedProducts();
             // Reconcile bounded pages as well as hooks: recovers missed callbacks and scheduled prices.
             foreach (['product','order','customer'] as $kind) {
@@ -356,6 +361,16 @@ final class Engine
         $key = $event['record_key'];
         $kind = $event['kind'];
         $stockLock = null;
+        $catalogLock = null;
+        // Use the capture lock before opening a transaction so a concurrent native edit
+        // cannot be captured between accepting the winning import and retiring its loser.
+        if ($kind === 'product' && ($known = $this->mapping($key))) {
+            $catalogLock = 'wd29_capture_' . sha1($this->table . 'product:' . $known['local_id']);
+            if ((int) ($this->sql('SELECT GET_LOCK(?,5) AS acquired', [$catalogLock])[0]['acquired'] ?? 0) !== 1) {
+                $this->fail($event, new \RuntimeException('Record capture is busy.'));
+                return;
+            }
+        }
         $this->sql('START TRANSACTION');
         try {
             $payload = json_decode($event['payload'], true, 64, JSON_THROW_ON_ERROR);
@@ -437,6 +452,12 @@ final class Engine
                     $native = $kind === 'customer' ? $this->customer($id) : ($kind === 'product' ? $this->adapter->product($id) : $this->adapter->order($id));
                     $nativeHash = $kind === 'product' ? self::catalogHash($native) : Protocol::fingerprint($native);
                     $this->sql('UPDATE {b}map SET fingerprint=?,local_hash=? WHERE record_key=?', [$hash, $nativeHash, $key]);
+                    if ($kind === 'product') {
+                        // These snapshots describe the native version just replaced by the
+                        // accepted import. Sending one afterward would silently restore the
+                        // losing version on the peer. Retain history and all stock/order work.
+                        $this->sql("UPDATE {b}queue SET state='ignored',error='Superseded by accepted incoming catalog.' WHERE direction='out' AND kind='product' AND record_key=? AND state IN ('pending','failed','conflict')", [$key]);
+                    }
                 }
             }
             $this->sql("UPDATE {b}queue SET state='applied',error='' WHERE seq=?", [$event['seq']]);
@@ -448,6 +469,7 @@ final class Engine
         } finally {
             $this->catalogApplying = $this->orderApplying = $this->stockApplying = false;
             if ($stockLock !== null) { $this->sql('SELECT RELEASE_LOCK(?)', [$stockLock]); }
+            if ($catalogLock !== null) { $this->sql('SELECT RELEASE_LOCK(?)', [$catalogLock]); }
         }
     }
 
@@ -456,6 +478,10 @@ final class Engine
         $attempts = (int) $event['attempts'] + 1;
         // Error text contains no payload, request headers, secrets or customer data.
         $message = substr(preg_replace('/[\r\n]+/', ' ', $error->getMessage()), 0, 255);
+        if ((($event['kind']??'')==='order' && $error instanceof NativeOrderReview) || (($event['kind']??'')==='customer' && $error instanceof NativeCustomerReview)) {
+            $this->sql("UPDATE {b}queue SET state='conflict',next_try=0,error=? WHERE seq=?",[$message,$event['seq']]);
+            return;
+        }
         // A configuration decision cannot improve after eight rapid retries. Keep it visible and
         // retry hourly as a fallback; saving the relevant settings removes this delay immediately.
         if (isset(self::SETTING_ERRORS[$message])) {
@@ -526,7 +552,7 @@ final class Engine
                     if (($data['key']??'')===$event['record_key'] && ($payload['hash']??'')===Protocol::fingerprint($data) && $this->equivalentOrderAugmentation($data,$map)) { $row['resolution']='Equivalent technical upgrade; safe retry available'; }
                     else {
                         $different=[];
-                        foreach (['status','source_status','total','currency','items','shipping_net','shipping_tax','discount','tax','refunds','custom_fields'] as $field) {
+                        foreach (['customer_key','status','source_status','total','currency','items','shipping_net','shipping_tax','discount','tax','refunds','custom_fields'] as $field) {
                             if (json_encode($native[$field]??null)!==json_encode($data[$field]??null)) { $different[]=$field; }
                         }
                         $row['resolution']='Review differences: '.($different?implode(', ',$different):'other order details');
@@ -585,42 +611,42 @@ final class Engine
         $actions = [];
         if (isset($setting['display_tax_rate'])) {
             $actions[] = ['code' => 'tax_rate_required', 'severity' => 'error', 'count' => $setting['display_tax_rate'], 'decision' => 'tax_rate', 'view' => 'settings', 'suggest' => $this->suggestedTaxRate(),
-                'title' => 'Taux de TVA à confirmer', 'text' => $setting['display_tax_rate'] . ' échange(s) reçu(s) sans information fiscale attendent le taux de TVA à appliquer à leurs prix.'];
+                'title' => \WD29\Bridge\I18n::t('VAT rate to confirm'), 'text' => $setting['display_tax_rate'] . \WD29\Bridge\I18n::t(' incoming event(s) without tax information need a VAT rate for their prices.')];
         }
         if (isset($setting['tax_rules'])) {
             $actions[] = ['code' => 'tax_mapping_required', 'severity' => 'error', 'count' => $setting['tax_rules'], 'decision' => '', 'view' => 'settings',
-                'title' => 'Groupe de taxes à associer', 'text' => $setting['tax_rules'] . ' échange(s) utilisent un taux sans groupe de règles de taxes unique : renseignez la correspondance taux → groupe dans les réglages.'];
+                'title' => \WD29\Bridge\I18n::t('Tax group to map'), 'text' => $setting['tax_rules'] . \WD29\Bridge\I18n::t(' event(s) use a rate without a unique tax rules group: configure the rate-to-group mapping in settings.')];
         }
         foreach ([
-            'woo_taxes_disabled' => ['Taxes WooCommerce désactivées', 'Activez les taxes dans WooCommerce → Réglages → Général, puis configurez les taux dans l’onglet TVA. Les prix reçus sont conservés ; aucune TVA n’est devinée.'],
-            'woo_tax_class' => ['Taux de TVA WooCommerce manquant', 'Ajoutez une classe de taxe WooCommerce dont le taux de base correspond au taux reçu. Vérifiez le pays de base et les règles de TVA.'],
-            'woo_source_tax' => ['Information fiscale source manquante', 'Les prix reçus ne précisent pas leur TVA alors que WooCommerce utilise les taxes. Configurez la fiscalité de la boutique source avant de renvoyer le produit.'],
+            'woo_taxes_disabled' => [\WD29\Bridge\I18n::t('WooCommerce taxes disabled'), \WD29\Bridge\I18n::t('Enable taxes in WooCommerce → Settings → General, then configure rates in the Tax tab. Incoming prices are retained; VAT is never guessed.')],
+            'woo_tax_class' => [\WD29\Bridge\I18n::t('WooCommerce VAT rate missing'), \WD29\Bridge\I18n::t('Add a WooCommerce tax class with a base rate matching the incoming rate. Check the base country and VAT rules.')],
+            'woo_source_tax' => [\WD29\Bridge\I18n::t('Source tax information missing'), \WD29\Bridge\I18n::t('Incoming prices do not specify VAT while WooCommerce uses taxes. Configure source store tax settings before sending the product again.')],
         ] as $code => $description) {
             if (isset($setting[$code])) {
                 $actions[] = ['code' => $code, 'severity' => 'error', 'count' => $setting[$code], 'decision' => '', 'view' => 'settings',
-                    'title' => $description[0], 'text' => $setting[$code] . ' échange(s) attendent une configuration fiscale. ' . $description[1]];
+                    'title' => $description[0], 'text' => $setting[$code] . \WD29\Bridge\I18n::t(' event(s) need tax configuration. ') . $description[1]];
             }
         }
         if ($catalogConflicts > 0) {
             $policy = $config['conflict_policy'] ?? 'review';
             $actions[] = in_array($policy, ['woo','ps'], true)
                 ? ['code' => 'catalog_conflicts', 'severity' => 'warning', 'count' => $catalogConflicts, 'decision' => 'resolve_catalog', 'view' => 'activity',
-                    'title' => 'Conflits de catalogue à relancer', 'text' => $catalogConflicts . ' produit(s) modifié(s) des deux côtés attendent d\'être relancés avec la priorité choisie.']
+                    'title' => \WD29\Bridge\I18n::t('Catalogue conflicts to retry'), 'text' => $catalogConflicts . \WD29\Bridge\I18n::t(' product(s) changed on both stores need a retry with the selected priority.')]
                 : ['code' => 'conflict_policy_required', 'severity' => 'error', 'count' => $catalogConflicts, 'decision' => 'conflict_policy', 'view' => 'activity',
-                    'title' => 'Boutique prioritaire à choisir', 'text' => $catalogConflicts . ' produit(s) modifié(s) en même temps sur les deux boutiques. Choisissez la boutique dont la version l\'emporte ; la même règle est appliquée à la boutique partenaire.'];
+                    'title' => \WD29\Bridge\I18n::t('Choose the priority store'), 'text' => $catalogConflicts . \WD29\Bridge\I18n::t(' product(s) changed simultaneously on both stores. Choose which store takes priority; the same policy applies on the partner store.')];
         }
         if ($orderConflicts > 0) {
             $actions[] = ['code' => 'order_conflicts', 'severity' => 'warning', 'count' => $orderConflicts, 'decision' => '', 'view' => 'activity',
-                'title' => 'Commandes à examiner', 'text' => $orderConflicts . ' mise(s) à jour de commande modifiée(s) des deux côtés : comparez les versions dans l\'activité.'];
+                'title' => \WD29\Bridge\I18n::t('Orders to review'), 'text' => $orderConflicts . \WD29\Bridge\I18n::t(' order update(s) changed on both stores: compare versions in Activity.')];
         }
         if ($failed > 0) {
             $actions[] = ['code' => 'events_failed', 'severity' => 'error', 'count' => $failed, 'decision' => 'retry', 'view' => 'activity',
-                'title' => 'Échanges en échec', 'text' => $failed . ' échange(s) ont échoué après huit essais. Consultez l\'erreur dans l\'activité, corrigez-la puis relancez.'];
+                'title' => \WD29\Bridge\I18n::t('Failed events'), 'text' => $failed . \WD29\Bridge\I18n::t(' event(s) failed after eight attempts. Check the error in Activity, fix it, then retry.')];
         }
         $worker = $this->adapter->workerStatus(); $at = strtotime($worker['at'] ?? '');
         if ($this->mode() !== 'disabled' && ($at === false || $now - $at > 300)) {
             $actions[] = ['code' => 'worker_stale', 'severity' => 'error', 'count' => 0, 'decision' => '', 'view' => 'activity',
-                'title' => 'Traitement automatique arrêté', 'text' => 'Aucun passage du worker depuis plus de cinq minutes : ajoutez la tâche planifiée du serveur (une exécution par minute, voir OPERATIONS.md).'];
+                'title' => \WD29\Bridge\I18n::t('Automatic processing stopped'), 'text' => \WD29\Bridge\I18n::t('The worker has not run for more than five minutes: add the server scheduled task (once a minute, see OPERATIONS.md).')];
         }
         return $actions;
     }
@@ -650,13 +676,13 @@ final class Engine
     {
         $after = $this->config(); $notes = [];
         foreach (['display_tax_rate','display_basis','tax_rules'] as $field) {
-            if (($before[$field] ?? null) !== ($after[$field] ?? null)) { $count = $this->requeueSettingErrors(); if ($count) { $notes[] = $count . ' échange(s) relancé(s)'; } break; }
+            if (($before[$field] ?? null) !== ($after[$field] ?? null)) { $count = $this->requeueSettingErrors(); if ($count) { $notes[] = $count . \WD29\Bridge\I18n::t(' event(s) retried'); } break; }
         }
         $policy = $after['conflict_policy'] ?? 'review';
         if ($policy !== ($before['conflict_policy'] ?? 'review')) {
-            if (in_array($policy, ['woo','ps'], true)) { $this->retryCatalogConflicts(); $notes[] = 'conflits de catalogue relancés'; }
-            try { $this->peer(['op' => 'conflict_policy', 'policy' => $policy], 8); $notes[] = 'même priorité appliquée à la boutique partenaire'; }
-            catch (\Throwable $e) { $notes[] = 'appliquez la même priorité sur la boutique partenaire'; }
+            if (in_array($policy, ['woo','ps'], true)) { $this->retryCatalogConflicts(); $notes[] = \WD29\Bridge\I18n::t('catalogue conflicts retried'); }
+            try { $this->peer(['op' => 'conflict_policy', 'policy' => $policy], 8); $notes[] = \WD29\Bridge\I18n::t('same priority applied on the partner store'); }
+            catch (\Throwable $e) { $notes[] = \WD29\Bridge\I18n::t('apply the same priority on the partner store'); }
         }
         return $notes ? ' ' . ucfirst(implode(' ; ', $notes)) . '.' : '';
     }
@@ -667,20 +693,20 @@ final class Engine
         $before = $this->config(); $config = $before;
         if ($decision === 'tax_rate') {
             $rate = trim((string) ($input['rate'] ?? ''));
-            if ($rate === '' || !is_numeric($rate) || (float) $rate < 0 || (float) $rate > 100) { throw new \RuntimeException('Taux de TVA invalide.'); }
+            if ($rate === '' || !is_numeric($rate) || (float) $rate < 0 || (float) $rate > 100) { throw new \RuntimeException(\WD29\Bridge\I18n::t('Invalid VAT rate.')); }
             $config['display_tax_rate'] = $rate; $config['display_basis'] = ($input['basis'] ?? 'gross') === 'net' ? 'net' : 'gross';
             $this->adapter->saveConfig($config);
-            return 'Taux de TVA confirmé : ' . $rate . ' % ' . ($config['display_basis'] === 'net' ? 'HT' : 'TTC') . '.' . $this->settingsChanged($before);
+            return \WD29\Bridge\I18n::t('VAT rate confirmed: ') . $rate . ' % ' . ($config['display_basis'] === 'net' ? \WD29\Bridge\I18n::t('Excl. tax') : \WD29\Bridge\I18n::t('Incl. tax')) . '.' . $this->settingsChanged($before);
         }
         if ($decision === 'conflict_policy') {
             $policy = (string) ($input['policy'] ?? '');
-            if (!in_array($policy, ['woo','ps'], true)) { throw new \RuntimeException('Règle de conflit invalide.'); }
+            if (!in_array($policy, ['woo','ps'], true)) { throw new \RuntimeException(\WD29\Bridge\I18n::t('Invalid conflict policy.')); }
             $config['conflict_policy'] = $policy;
             $this->adapter->saveConfig($config);
-            return 'Priorité à ' . ($policy === 'ps' ? 'PrestaShop' : 'WooCommerce') . ' enregistrée.' . $this->settingsChanged($before);
+            return \WD29\Bridge\I18n::t('Priority: ') . ($policy === 'ps' ? 'PrestaShop' : 'WooCommerce') . \WD29\Bridge\I18n::t(' saved.') . $this->settingsChanged($before);
         }
-        if ($decision === 'resolve_catalog') { $this->retryCatalogConflicts(); return 'Conflits de catalogue remis en file avec la priorité choisie.'; }
-        if ($decision === 'retry') { $this->retry(); return 'Événements en échec remis en file.'; }
+        if ($decision === 'resolve_catalog') { $this->retryCatalogConflicts(); return \WD29\Bridge\I18n::t('Catalogue conflicts requeued with the selected priority.'); }
+        if ($decision === 'retry') { $this->retry(); return \WD29\Bridge\I18n::t('Failed events requeued.'); }
         throw new \RuntimeException('Action inconnue.');
     }
 
@@ -701,7 +727,7 @@ final class Engine
             $result[] = ['source' => $event['record_key'], 'local_id' => $map ? $map['local_id'] : 'not applied',
                 'name' => $data['name'] ?? '', 'brands' => implode(', ', $data['brands'] ?? []), 'tags' => implode(', ', $data['tags'] ?? []), 'type' => $data['type'] ?? '',
                 'regular' => $prices['regular'] ?? 'missing', 'sale' => $prices['sale'] ?? '',
-                'tax' => $prices['tax_rate'] === null ? 'unknown' : (string)$prices['tax_rate'] . '%',
+                'tax' => ($prices['tax_rate'] ?? null) === null ? 'unknown' : (string)$prices['tax_rate'] . '%',
                 'basis' => $prices['basis'] ?? '', 'initial_stock_snapshot' => implode('; ', $stock),
                 'identifiers'=>json_encode($data['identifiers']??[],JSON_UNESCAPED_UNICODE),
                 'dimensions_cm'=>json_encode($data['dimensions_cm']??[],JSON_UNESCAPED_UNICODE),
@@ -740,7 +766,7 @@ final class Engine
         }
         if (!is_array($data['billing']??null) || !is_array($data['shipping']??null)) { throw new \RuntimeException('Invalid contact address.'); }
         // Contact records contain no credentials, roles, payment tokens or marketing consents.
-        $clean=array_intersect_key($data,array_flip(['key','first_name','last_name','email','phone','company','billing','shipping','guest','deleted']));
+        $clean=array_intersect_key($data,array_flip(['key','first_name','last_name','email','phone','company','billing','shipping','guest','deleted','active']));
         $allowed=array_flip(['first_name','last_name','company','address_1','address_2','city','postcode','country','state','phone','email']);
         foreach (['billing','shipping'] as $field) {
             $clean[$field]=array_intersect_key($data[$field],$allowed);
@@ -756,6 +782,7 @@ final class Engine
                 $clean['addresses'][]=$entry;
             }
         }
+        if (array_key_exists('active',$data) && !is_bool($data['active'])) { throw new \RuntimeException('Invalid customer account status.'); }
         $clean['guest']=(bool)($data['guest']??false); $clean['deleted']=(bool)($data['deleted']??false);
         if (array_key_exists('custom_fields',$data)) {
             $fields=$data['custom_fields'];
@@ -782,9 +809,17 @@ final class Engine
     private function applyCustomer(array $data): int
     {
         if (strpos($data['key'],$this->adapter->site().':')===0) { throw new \RuntimeException('Contact details are edited on their originating store.'); }
-        $clean=$this->contactData($data); $id=$this->contactId($data['key']);
+        $clean=$this->contactData($data);
+        if (!empty($this->config()['native_customers'])) {
+            $guard=CustomerRecordGuard::inspect($this,$data['key'],$clean);
+            if ($guard['state']==='conflict' || (!empty($clean['guest']) && $guard['native_id'])) { throw new NativeCustomerReview('Native customer copy changed; identity/profile review required ('.$guard['reason'].').'); }
+        }
+        $id=$this->contactId($data['key']);
         $this->sql('UPDATE {b}contacts SET data=? WHERE id=?',[Protocol::encode($clean),$id]);
-        if (!empty($this->config()['native_customers']) && !$clean['guest'] && !$clean['deleted'] && method_exists($this->adapter,'applyCustomerAccount')) { $this->adapter->applyCustomerAccount($clean); }
+        if (!empty($this->config()['native_customers'])) {
+            if ($clean['deleted'] && method_exists($this->adapter,'disableCustomerAccount')) { $this->adapter->disableCustomerAccount($clean['key']); }
+            elseif (!$clean['guest'] && !$clean['deleted'] && method_exists($this->adapter,'applyCustomerAccount')) { $this->adapter->applyCustomerAccount($clean); }
+        }
         return $id;
     }
 
@@ -829,9 +864,9 @@ final class Engine
         $workerAge=$at===false?null:max(0,$now-$at); $configured=$this->config()['mode']??'disabled'; $mode=$this->mode(); $issues=[];
         if ($configured!=='disabled') { foreach ($this->licenceIssues($configured,$now) as $issue) { $issues[]=$issue; } }
         if ($mode!=='disabled' && ($workerAge===null || $workerAge>300)) {
-            $issues[]=['code'=>'worker_stale','severity'=>'error','action'=>'Lancez le worker du serveur chaque minute ; vérifiez son code de sortie et la disponibilité de PHP et de la base.'];
+            $issues[]=['code'=>'worker_stale','severity'=>'error','action'=>\WD29\Bridge\I18n::t('Run the server worker every minute; check its exit code and PHP and database availability.')];
         } elseif (($worker['state']??'')==='failed' || ($worker['state']??'')==='delivery_error') {
-            $issues[]=['code'=>'worker_failed','severity'=>'error','action'=>'Examinez les événements en échec ou en reprise et les journaux du serveur, puis relancez le worker.'];
+            $issues[]=['code'=>'worker_failed','severity'=>'error','action'=>\WD29\Bridge\I18n::t('Review failed or retrying events and server logs, then run the worker again.')];
         }
         $queue=$this->sql("SELECT direction,state,COUNT(*) total,MIN(created_at) oldest_at,MIN(next_try) next_try,SUM(attempts>0) retried FROM {b}queue WHERE state IN ('pending','failed','conflict') GROUP BY direction,state");
         foreach ($queue as &$group) {
@@ -839,10 +874,10 @@ final class Engine
             $group['oldest_age_seconds']=max(0,$now-(strtotime($group['oldest_at'].' UTC')?:$now));
             $group['next_retry_in_seconds']=max(0,(int)$group['next_try']-$now);
             unset($group['oldest_at'],$group['next_try']);
-            if ($group['state']==='conflict') { $code='record_conflict'; $action='Comparez les deux versions ; choisissez une priorité de catalogue (produits uniquement), puis relancez le conflit examiné.'; }
-            elseif ($group['state']==='failed') { $code='retry_exhausted'; $action='Corrigez l\'erreur indiquée dans le journal, puis relancez. Les événements suivants de la même fiche restent bloqués.'; }
-            elseif ($group['retried']>0) { $code='event_retrying'; $action='Consultez le journal et l\'état de la boutique partenaire. Les reprises automatiques s\'arrêtent après huit essais.'; }
-            elseif ($group['oldest_age_seconds']>300 && !($mode==='audit' && $group['direction']==='in')) { $code='queue_delayed'; $action='Vérifiez les deux workers et les événements plus anciens en échec ou en conflit pour cette fiche ; laissez passer les lots suivants.'; }
+            if ($group['state']==='conflict') { $code='record_conflict'; $action=\WD29\Bridge\I18n::t('Compare both versions; choose catalogue priority (products only), then retry the reviewed conflict.'); }
+            elseif ($group['state']==='failed') { $code='retry_exhausted'; $action=\WD29\Bridge\I18n::t('Fix the error shown in the log, then retry. Subsequent events for the same record remain blocked.'); }
+            elseif ($group['retried']>0) { $code='event_retrying'; $action=\WD29\Bridge\I18n::t('Check the log and partner store status. Automatic retries stop after eight attempts.'); }
+            elseif ($group['oldest_age_seconds']>300 && !($mode==='audit' && $group['direction']==='in')) { $code='queue_delayed'; $action=\WD29\Bridge\I18n::t('Check both workers and earlier failed or conflicting events for this record; allow subsequent batches to run.'); }
             else { continue; }
             $issues[]=['code'=>$code,'severity'=>$group['state']==='pending'?'warning':'error','direction'=>$group['direction'],'count'=>$group['total'],'action'=>$action];
         }
@@ -855,7 +890,7 @@ final class Engine
         $active=$this->sql('SELECT issue_key,code,first_seen,last_seen,occurrences FROM {b}issues ORDER BY first_seen LIMIT 100');
         foreach ($active as $issue) {
             $issues[]=['code'=>$issue['code'],'severity'=>'error','record'=>$issue['issue_key'],'age_seconds'=>max(0,$now-(int)$issue['first_seen']),'occurrences'=>(int)$issue['occurrences'],
-                'action'=>strpos($issue['code'],'deletion_')===0?'Un produit source est introuvable. Vérifiez son dernier instantané et la disponibilité de la base ; gardez la correspondance d\'origine. L\'archivage sera retenté, la source ne sera pas recréée.':($issue['code']==='capture_failed'?'Examinez cette fiche et le message de capture ; corrigez les champs non pris en charge ou invalides. Une nouvelle capture réussie lève l\'alerte.':'Vérifiez l\'accès HTTPS à la boutique partenaire et la configuration commune ; un échange réussi lève l\'alerte.')];
+                'action'=>strpos($issue['code'],'deletion_')===0?\WD29\Bridge\I18n::t('A source product was not found. Check its latest snapshot and database availability; keep the original mapping. Archiving will be retried; the source will not be recreated.'):($issue['code']==='capture_failed'?\WD29\Bridge\I18n::t('Review this record and its capture message; fix unsupported or invalid fields. A successful new capture clears the alert.'):\WD29\Bridge\I18n::t('Check HTTPS access to the partner store and the shared configuration; a successful exchange clears the alert.'))];
         }
         return ['ok'=>!$issues,'mode'=>$mode,'configured_mode'=>$configured,'licence'=>$this->licence()->gate($now)[1],'worker_age_seconds'=>$workerAge,'queue'=>$queue,'issues'=>$issues];
     }
@@ -865,14 +900,14 @@ final class Engine
         if (Distribution::isMarketplace()) { return []; }
         $licence=$this->licence(); [$live,$reason]=$licence->gate($now); $state=$licence->state(); $issues=[];
         if ($configured==='live' && !$live) {
-            $issues[]=['code'=>'licence_paused','severity'=>'error','action'=>'Le mode live est suspendu par la licence ('.$reason.') : les événements reçus sont conservés, rien n\'est appliqué. Saisissez ou renouvelez la clé ; le mode live reprend au passage suivant du worker.'];
+            $issues[]=['code'=>'licence_paused','severity'=>'error','action'=>\WD29\Bridge\I18n::t('Live mode is paused by the license (').$reason.\WD29\Bridge\I18n::t(') : incoming events are retained without applying them. Enter or renew the key; live mode resumes on the next worker run.')];
         } elseif (in_array($reason,['missing','unverified'],true)) {
-            $issues[]=['code'=>'licence_missing','severity'=>'warning','action'=>'Saisissez la clé de licence (plugins.inklura.fr/compte) avant le '.gmdate('d/m/Y',$licence->graceEnds()).' ; le mode live passera ensuite en audit.'];
+            $issues[]=['code'=>'licence_missing','severity'=>'warning','action'=>\WD29\Bridge\I18n::t('Enter the license key (plugins.inklura.fr/compte) before ').gmdate('d/m/Y',$licence->graceEnds()).\WD29\Bridge\I18n::t(' ; live mode will then switch to audit.')];
         } elseif (in_array($reason,['expired','seats_exhausted'],true)) {
-            $issues[]=['code'=>'licence_'.$reason,'severity'=>'warning','action'=>(string)($state['message']??'Vérifiez la licence dans l\'espace client.')];
+            $issues[]=['code'=>'licence_'.$reason,'severity'=>'warning','action'=>(string)($state['message']??\WD29\Bridge\I18n::t('Check the license in your customer account.'))];
         }
         if (($state['key']??'')!=='' && (int)($state['failures']??0)>0 && $now-(int)($state['checked_at']??0)>3*86400) {
-            $issues[]=['code'=>'licence_unreachable','severity'=>'warning','action'=>'Le serveur de licence ne répond plus depuis plusieurs jours ('.($state['last_error']??'').'). Rien ne change en attendant ; vérifiez la sortie HTTPS vers plugins.inklura.fr.'];
+            $issues[]=['code'=>'licence_unreachable','severity'=>'warning','action'=>\WD29\Bridge\I18n::t('The license server has not responded for several days (').($state['last_error']??'').\WD29\Bridge\I18n::t('). Nothing changes while waiting; check outbound HTTPS access to plugins.inklura.fr.')];
         }
         return $issues;
     }

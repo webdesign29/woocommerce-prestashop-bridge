@@ -33,7 +33,7 @@ function inspect($expected,$reason=null,?array $incoming=null){global $engine,$k
 function resetFixture(){global $adapter,$engine,$key,$baseline;$adapter=new GuardAdapter();$engine=new Engine($adapter);$q=$adapter->db->prepare('INSERT INTO fixture_wd29_bridge_account_links VALUES(?,7)');$q->execute([$key]);$q=$adapter->db->prepare('INSERT INTO fixture_wd29_bridge_contacts VALUES(?,?)');$q->execute([$key,json_encode($baseline)]);nativeFixture();}
 
 function get_userdata($id){return $GLOBALS['user'];}
-function get_user_meta($id,$key,$single){return $GLOBALS['origin'];}
+function get_user_meta($id,$key,$single){return $key==='_wd29_bridge_customer_disabled'?($GLOBALS['disabled']??''):$GLOBALS['origin'];}
 function user_can($user,$cap){return $GLOBALS['privileged'];}
 function get_option($key,$default){return $GLOBALS['rules'];}
 class WC_Customer {
@@ -126,5 +126,6 @@ foreach(['different','same','missing','delete'] as $case){
 resetFixture();$old=$baseline;unset($old['custom_fields']);$adapter->db->prepare('UPDATE fixture_wd29_bridge_contacts SET data=?')->execute([json_encode($old)]);$incoming=$baseline;$GLOBALS['custom']['loyalty']['value']='locally-changed';inspect('conflict','native_new_custom_field_conflict',$incoming);
 resetFixture();$incoming=$baseline;$incoming['key']='ps:customer:999';inspect('conflict','incoming_contact_invalid',$incoming);
 
+resetFixture();$data=$baseline;$data['active']=true;$adapter->db->prepare('UPDATE fixture_wd29_bridge_contacts SET data=?')->execute([json_encode($data)]);inspect('linked');$GLOBALS['disabled']='1';inspect('conflict','native_account_status_changed');$data['active']=false;$adapter->db->prepare('UPDATE fixture_wd29_bridge_contacts SET data=?')->execute([json_encode($data)]);inspect('linked');$GLOBALS['disabled']='';
 echo 'PASS: '.$count." native customer guard assertions; read-only, bounded, no personal data or real emails\n";
 }

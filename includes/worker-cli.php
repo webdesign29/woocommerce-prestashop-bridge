@@ -1,10 +1,10 @@
 <?php
 /** Local server worker. Intentionally unavailable over HTTP. */
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
-$usage="Usage: php worker-cli.php --root=/absolute/store/path --platform=woo|ps --command=tick|health\n";
+$usage="Usage: php worker-cli.php --root=/absolute/store/path --platform=woo|ps --command=tick|health|shopify-tick|shopify-health\n";
 $options=getopt('', ['root:', 'platform:', 'command:']);
 $root=realpath($options['root']??''); $platform=$options['platform']??''; $command=$options['command']??'tick';
-if (!$root || !isset($options['root']) || substr($options['root'],0,1)!=='/' || !in_array($platform,['woo','ps'],true) || !in_array($command,['tick','health'],true)) { fwrite(STDERR,$usage); exit(64); }
+if (!$root || !isset($options['root']) || substr($options['root'],0,1)!=='/' || !in_array($platform,['woo','ps'],true) || !in_array($command,['tick','health','shopify-tick','shopify-health'],true) || (strpos($command,'shopify-')===0 && $platform!=='woo')) { fwrite(STDERR,$usage); exit(64); }
 // Suppress browser-oriented output from third-party plugins during boot.
 ob_start();
 try {
@@ -28,7 +28,13 @@ try {
         if (!Module::isEnabled('wd29woobridge')) { throw new RuntimeException('PrestaShop bridge must be enabled.'); }
         $module=Module::getInstanceByName('wd29woobridge'); $engine=$module->bridge();
     }
-    if ($command==='tick') { $engine->tick(); }
+    if (strpos($command,'shopify-')===0) {
+        if ($command==='shopify-tick') { \WD29\Bridge\Shopify\Admin::tick(); }
+        $config=\WD29\Bridge\Shopify\Admin::config();$worker=(array)get_option('inklura_shopify_worker',[]);
+        $status=['mode'=>$config['mode'] ?? 'disabled','shop'=>$config['shop'] ?? '','queue'=>\WD29\Bridge\Shopify\Admin::repo()->summary(),'worker'=>$worker];
+        while(ob_get_level()>0){ob_end_clean();}fwrite(STDOUT,json_encode($status,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)."\n");exit(($status['mode']==='disabled' || ($worker['state'] ?? '')==='failed')?2:0);
+    }
+    if ($command==='tick') { $engine->tick(); if ($platform==='woo') { \WD29\Bridge\Shopify\Admin::tick(); } }
     $status=$engine->diagnostics();
     while (ob_get_level()>0) { ob_end_clean(); }
     fwrite(STDOUT,json_encode($status,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)."\n");

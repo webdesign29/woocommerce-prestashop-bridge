@@ -1,0 +1,1872 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Inklura Sync 0.8.13\n"
+"MIME-Version: 1.0\n"
+"PO-Revision-Date: 2026-11-02 14:00+0000\n"
+"Last-Translator: Inklura\n"
+"Language-Team: Inklura\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: \n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid " %, most common catalogue rate.</small> "
+msgstr ""
+
+msgid " (limited preview)"
+msgstr ""
+
+msgid " : local change or conflict to review"
+msgstr ""
+
+msgid " ; live mode will then switch to audit."
+msgstr ""
+
+msgid " ?\n\nUnsaved changes in this editor are not included. Automatic mode remains unchanged."
+msgstr ""
+
+msgid " Check both plugin connections and versions.</p>"
+msgstr ""
+
+msgid " Check the connection and versions of both plugins.</p>"
+msgstr ""
+
+msgid " Last event: "
+msgstr ""
+
+msgid " Live mode is paused: events are received and retained; nothing is lost."
+msgstr ""
+
+msgid " Source confirmation pending; refresh before retrying."
+msgstr ""
+
+msgid " action(s) required for synchronization to continue.</strong></p>"
+msgstr ""
+
+msgid " affected variation(s)."
+msgstr ""
+
+msgid " already synchronized · "
+msgstr ""
+
+msgid " applied, "
+msgstr ""
+
+msgid " available. <a href=\""
+msgstr ""
+
+msgid " blocked event(s)."
+msgstr ""
+
+msgid " conflict(s). This batch only; Next shows other orders.</p><table class=\"table wd-order-comparison\"><thead><tr><th class=\"wd-side-woo\">WordPress / WooCommerce<br><small>"
+msgstr ""
+
+msgid " difference(s)"
+msgstr ""
+
+msgid " event(s) failed after eight attempts. Check the error in Activity, fix it, then retry."
+msgstr ""
+
+msgid " event(s) need tax configuration. "
+msgstr ""
+
+msgid " event(s) retried"
+msgstr ""
+
+msgid " event(s) use a rate without a unique tax rules group: configure the rate-to-group mapping in settings."
+msgstr ""
+
+msgid " identical · "
+msgstr ""
+
+msgid " identical, "
+msgstr ""
+
+msgid " in this batch.</p>"
+msgstr ""
+
+msgid " incoming event(s) without tax information need a VAT rate for their prices."
+msgstr ""
+
+msgid " new."
+msgstr ""
+
+msgid " on PrestaShop. Next offset: "
+msgstr ""
+
+msgid " on WordPress, "
+msgstr ""
+
+msgid " order update(s) changed on both stores: compare versions in Activity."
+msgstr ""
+
+msgid " pending event(s)."
+msgstr ""
+
+msgid " point(s) to review"
+msgstr ""
+
+msgid " product(s) changed on both stores need a retry with the selected priority."
+msgstr ""
+
+msgid " product(s) changed simultaneously on both stores. Choose which store takes priority; the same policy applies on the partner store."
+msgstr ""
+
+msgid " records displayed"
+msgstr ""
+
+msgid " saved variation(s) · "
+msgstr ""
+
+msgid " saved."
+msgstr ""
+
+msgid " to create on "
+msgstr ""
+
+msgid " to create · "
+msgstr ""
+
+msgid " to review"
+msgstr ""
+
+msgid " to review (this batch).</p><label class=\"wd-difference-filter\"><input type=\"checkbox\" data-differences-only> Show differences only</label><table class=\"table wd-order-comparison\"><thead><tr><th class=\"wd-side-woo\">WordPress / WooCommerce</th><th class=\"wd-side-ps\">PrestaShop</th><th>Differences</th><th>Action</th></tr></thead><tbody>"
+msgstr ""
+
+msgid " to review."
+msgstr ""
+
+msgid " to review. Actualisez la comparaison."
+msgstr ""
+
+msgid " to update · "
+msgstr ""
+
+msgid " · batch "
+msgstr ""
+
+msgid " · expiry "
+msgstr ""
+
+msgid " · missing"
+msgstr ""
+
+msgid " · source confirmation pending"
+msgstr ""
+
+msgid " → copy on "
+msgstr ""
+
+msgid "\" aria-label=\"Connector pages\">"
+msgstr ""
+
+msgid "\"></td><td><select aria-label=\"Field source\" name=\""
+msgstr ""
+
+msgid "\"><button class=\"button\">Retry</button></form>"
+msgstr ""
+
+msgid "\"><strong>No copy on "
+msgstr ""
+
+msgid "\">Cancel</button><button value=\"confirm\" class=\""
+msgstr ""
+
+msgid "\">Compare orders "
+msgstr ""
+
+msgid "\">Compare stores</a> <a class=\""
+msgstr ""
+
+msgid "\">License</a></p></div>"
+msgstr ""
+
+msgid "\">Priority: "
+msgstr ""
+
+msgid "\">Settings</a>"
+msgstr ""
+
+msgid "\">Synchronize</button></div></form>"
+msgstr ""
+
+msgid "\">Update from Plugins</a>.</p>"
+msgstr ""
+
+msgid "\">View events</a></p>"
+msgstr ""
+
+msgid ") : incoming events are retained without applying them. Enter or renew the key; live mode resumes on the next worker run."
+msgstr ""
+
+msgid "). Nothing changes while waiting; check outbound HTTPS access to plugins.inklura.fr."
+msgstr ""
+
+msgid ", including variations"
+msgstr ""
+
+msgid ". Automatic mode is unchanged."
+msgstr ""
+
+msgid ". Automatic mode unchanged."
+msgstr ""
+
+msgid "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Your benefits</title></head><body><main><h1>Your benefits</h1>"
+msgstr ""
+
+msgid "</button></form></div><details class=\"wd-sync-scope\"><summary>Synchronization scope and stock</summary><p class=\"wd-manual-note\">Full synchronization processes products, contacts and then orders, only in the selected direction. Identical copies are skipped; conflicts are flagged without overwriting. Variations, images and allowed fields follow their products. Login accounts remain optional. Existing product quantities continue to use stock events; this action does not force an inventory count.</p></details><noscript>JavaScript is required to run full batches. Individual actions remain available.</noscript><section id=\"wd-sync-progress\" hidden aria-label=\"Synchronization progress\"><strong data-sync-status role=\"status\"></strong><progress></progress><button type=\"button\" data-sync-stop class=\"button btn btn-default\">Stop after the current record</button><button type=\"button\" data-sync-copy class=\"button btn btn-default\">Copy log</button><pre data-sync-log></pre><p>Keep this page open. Stopping retains processed records; restarting skips records already synchronized.</p></section>"
+msgstr ""
+
+msgid "</code>. Enable the proxy in your Shopify app and configure the same path. Signed-in customers can only view their own linked account; balances are read from KerAwen through Commerce Pro.</p>"
+msgstr ""
+
+msgid "</div><p class=\"wd-manual-note\">Comparing changes nothing. Manual synchronization applies only the selected order and its contact details to the indicated store, even in stopped or audit mode, without enabling automatic tracking. A configured connection and write permission at the destination are required. Checkout drafts are excluded.</p>"
+msgstr ""
+
+msgid "</form><p><small>Only the key, store type, store URL, partner store URL and module version are sent to plugins.inklura.fr once a day. No catalogue, order or customer data is sent.</small></p></div>"
+msgstr ""
+
+msgid "</p><h2>Event log</h2><table class=\"widefat\"><thead><tr>"
+msgstr ""
+
+msgid "</p><table class=\"widefat\"><thead><tr><th>ID</th><th>Type</th><th>Resource</th><th>State</th><th>Diagnostic</th><th></th></tr></thead><tbody>"
+msgstr ""
+
+msgid "</select></label> Choose the same policy on both stores.</p>"
+msgstr ""
+
+msgid "</select></label><button name=\"bridge_action\" value=\"manual_records_scan\" class=\"button button-primary btn btn-primary\">Compare / actualiser</button></form>"
+msgstr ""
+
+msgid "</select></td><td><input aria-label=\"Local key\" name=\""
+msgstr ""
+
+msgid "</small></th><th>Difference between stores</th><th>Action on "
+msgstr ""
+
+msgid "</strong><small>This order exists only on its source store.</small></td>"
+msgstr ""
+
+msgid "</table><h2>Linked customer accounts</h2><p>Optional native accounts have their own password. An email address already in use requires manual review. Guests, passwords and marketing consent are never copied.</p><table class=\"widefat table\"><tr><th>Source customer</th><th>Local account (ID)</th></tr>"
+msgstr ""
+
+msgid "</table><p>Run the supplied worker every minute. The health command exit code can be used by hosting monitoring. Stock synchronizes asynchronously: two simultaneous sales of the last item require a shared reservation service.</p>"
+msgstr ""
+
+msgid "</tbody></table><h2>Catalogue</h2><p>Latest transmitted snapshots; unknown stock does not mean zero stock. Displays up to 200 products; this is a report limit, not a synchronization cap.</p><table class=\"widefat\"><thead><tr>"
+msgstr ""
+
+msgid "</tbody></table><h2>Customer contacts</h2><p>Read-only copies: edit them in their source store. This contact view does not copy accounts, passwords or marketing consent; email is never used to merge records. Displays up to 200 contacts.</p><table class=\"widefat\"><thead><tr>"
+msgstr ""
+
+msgid "</tbody></table><h2>Orders</h2><p>Unlinked historical lines retain their original details; catalogue links are created when the product becomes available.</p><table class=\"widefat\"><thead><tr>"
+msgstr ""
+
+msgid "</tbody></table><p><button type=\"button\" class=\"button\" id=\"wd29-add-field\">Add field</button> <button class=\"button button-primary\" name=\"bridge_action\" value=\"save_field_rows\">Save fields</button></p></form>"
+msgstr ""
+
+msgid "</tbody></table><p>Blank secret fields retain their saved value. The app secret also verifies webhooks. The own-organization flow requires an app installed on a store in that same organization.</p><p>Only one location is synchronized. Currency and tax-inclusive/exclusive pricing must match. The catalogue imports titles, descriptions, options, references, barcodes and prices. Simultaneous changes, removals and structural changes are flagged for review. Linked customer names, email addresses and phone numbers are synchronized. The default Shopify address maps to WooCommerce billing; its export is configured separately. Additional addresses and the WooCommerce shipping address remain separate. Exporting new records requires both directions mode; new records use a unique identifier, without matching by email or reference.</p><p>Compatible ordinary discount codes synchronize separately: percentage, fixed cart or fixed product amount, all products and customers, without usage limits, stacking or additional conditions. A rule that becomes incompatible pauses its copy; shared usage limits must not be duplicated. Shopify gift cards, credit notes and points are not linked to the KerAwen balance. New simple and variable products can be exported; variations must have explicit options, without an any value.</p>"
+msgstr ""
+
+msgid "<br>Read-only copy: manage payments, refunds and shipments on Shopify.</p>"
+msgstr ""
+
+msgid "<button class=\"btn-primary button-primary\" name=\"bridge_action\" value=\"decide_resolve_catalog\">Retry conflicts</button>"
+msgstr ""
+
+msgid "<button class=\"btn-primary button-primary\" name=\"bridge_action\" value=\"decide_retry\">Retry failures</button>"
+msgstr ""
+
+msgid "<button class=\"btn-primary button-primary\" name=\"bridge_action\" value=\"decide_tax_rate\">Confirm and retry</button>"
+msgstr ""
+
+msgid "<button class=\"button button-primary\" name=\"bridge_action\" value=\"save\">Save settings</button></form><hr><form method=\"post\">"
+msgstr ""
+
+msgid "<button class=\"button\" name=\"bridge_action\" value=\"save_statuses\">Save statuses</button>"
+msgstr ""
+
+msgid "<button name=\"bridge_action\" value=\"licence_check\">Check now</button>"
+msgstr ""
+
+msgid "<button name=\"bridge_action\" value=\"licence_remove\" onclick=\"return confirm('Release the pair for this store and remove the key?')\">Remove key from this store</button>"
+msgstr ""
+
+msgid "<button type=\"button\" data-sync-start disabled class=\"button btn btn-default\">Synchronize this entire record type → "
+msgstr ""
+
+msgid "<button type=\"button\" data-sync-start disabled class=\"button button-primary btn btn-primary\">Full synchronization → "
+msgstr ""
+
+msgid "<div class=\"wd-comparison-direction\"><strong>Orders created on "
+msgstr ""
+
+msgid "<div class=\"wd-store-context\" aria-label=\"Stores in this connection\">"
+msgstr ""
+
+msgid "<div class=\"wrap\"><h1>PrestaShop Bridge</h1><p>Direct connection. In audit mode, incoming changes are queued without being applied. Every record keeps its source identity; an empty SKU is never used to match two records.</p>"
+msgstr ""
+
+msgid "<div class=\"wrap\"><h1>Shopify — Inklura Sync</h1><p>Connection independent of the WooCommerce / PrestaShop pair. Imported products and customers use WooCommerce as a relay; Shopify orders remain read-only copies in WooCommerce.</p>"
+msgstr ""
+
+msgid "<div data-record-comparison hidden style=\"display:none\"><p><strong data-record-direction></strong></p><p data-record-origin class=\"wd29-record-description\" style=\"font-size:13px;color:#646970\"></p><dl style=\"margin:12px 0\"><dt><strong>WooCommerce</strong></dt><dd data-record-woo style=\"margin:4px 0 10px\"></dd><dt><strong>PrestaShop</strong></dt><dd data-record-ps style=\"margin:4px 0 10px\"></dd></dl><p><a class=\"button\" data-record-admin-link hidden style=\"display:none;max-width:100%;white-space:normal;line-height:1.5;padding-top:4px;padding-bottom:4px\" target=\"_blank\" rel=\"noopener noreferrer\">Remote administration ↗</a><br><small data-record-admin-note hidden style=\"display:none\">Sign-in required on the partner store.</small></p><p data-record-changes></p><p data-record-variations class=\"wd29-record-description\" style=\"font-size:13px;color:#646970\"></p><details data-record-variation-details hidden style=\"display:none\"><summary>Affected variations</summary><ul data-record-variation-rows></ul></details><p data-record-customer class=\"wd29-record-description\" style=\"font-size:13px;color:#646970\"></p><p data-record-native class=\"wd29-record-description\" style=\"font-size:13px;color:#646970\"></p><p data-record-stock class=\"wd29-record-description\" style=\"font-size:13px;color:#646970\"></p><p data-record-events class=\"wd29-record-description\" style=\"font-size:13px;color:#646970\"></p></div>"
+msgstr ""
+
+msgid "<div id=\"wd-reports\" class=\"wd-section-title\"><h2>Reports</h2><p>Originals and imported copies on "
+msgstr ""
+
+msgid "<footer class=\"wd-footnote\">Inklura Sync · Reports show data tracked by the connector.</footer></div><script>"
+msgstr ""
+
+msgid "<form method=\"dialog\"><h2>Confirm synchronization</h2><p data-confirm-label></p><p>Only original records in the selected direction are sent. Conflicts remain for review. Automatic modes are retained.</p><div><button value=\"cancel\" class=\""
+msgstr ""
+
+msgid "<h2>Compare and synchronize</h2><form method=\"post\" class=\"wd-compare-controls\">"
+msgstr ""
+
+msgid "<h2>Custom fields</h2><p>Select only the business fields to synchronize. ACF definitions must exist on this store. Native prices, stock, identifiers and consent fields are excluded. On PrestaShop, product values are stored privately; no KerAwen field is created.</p><form method=\"post\">"
+msgstr ""
+
+msgid "<h2>Export an existing record</h2><p>Choose a WooCommerce record by its native ID. Products are created as drafts on Shopify; no order or payment is created.</p>"
+msgstr ""
+
+msgid "<h2>License</h2><div class=\"wd-licence\"><p><span class=\"wd-state "
+msgstr ""
+
+msgid "<h2>License</h2><div class=\"wd-licence\"><p><strong>"
+msgstr ""
+
+msgid "<h2>Order conflicts</h2><p>Retry equivalent order updates only accepts new empty fields or line identities when native values still match. Other differences remain paused.</p><table class=\"widefat table\"><tr><th>Event</th><th>Order</th><th>Local total / status / lines</th><th>Received total / status / lines</th><th>Resolution</th></tr>"
+msgstr ""
+
+msgid "<h2>Order statuses</h2><p>Unknown PrestaShop statuses are created automatically with their original label. Map them to an existing WooCommerce status if needed: only the mirror display changes; the original PrestaShop status stays the same.</p><form method=\"post\">"
+msgstr ""
+
+msgid "<h2>Orders to synchronize</h2><p>Choose the store where the orders were placed. WordPress stays on the left and PrestaShop on the right: the original and copy are identified in each column.</p><div class=\"wd-manual-directions\">"
+msgstr ""
+
+msgid "<h2>Refunds and credit notes</h2><p>Read-only copies from the source store. No second payment, restocking or fiscal document is created.</p><table class=\"widefat table\"><tr><th>Order</th><th>Refund</th><th>Amount</th><th>Currency</th></tr>"
+msgstr ""
+
+msgid "<label>Applied rate <input name=\"decision_tax_rate\" inputmode=\"decimal\" size=\"5\" required style=\"display:inline-block;width:6em\" value=\""
+msgstr ""
+
+msgid "<label>Ces prix sont saisis <select name=\"decision_tax_basis\" style=\"display:inline-block;width:auto\"><option value=\"gross\">Incl. tax</option><option value=\"net\">Excl. tax</option></select></label> "
+msgstr ""
+
+msgid "<noscript><p class=\"wd29-record-description\" style=\"font-size:13px;color:#646970\">Enable JavaScript to check the partner store link.</p></noscript></div>"
+msgstr ""
+
+msgid "<p class=\"form-row form-row-full wd29-record-description\">Inklura Sync: save your variations, then <a href=\"#wd29-product-link\">compare the product and its variations</a> in the Inklura Sync panel.</p>"
+msgstr ""
+
+msgid "<p class=\"wd-licence-alert\">Live mode is configured but paused by the license: this store is running in audit mode.</p>"
+msgstr ""
+
+msgid "<p><a class=\"button\" data-wd29-link-public hidden style=\"display:none\" target=\"_blank\" rel=\"noopener noreferrer\">View on PrestaShop ↗</a></p>"
+msgstr ""
+
+msgid "<p><button type=\"button\" class=\"button\" data-record-refresh>Compare</button> <button type=\"button\" class=\"button button-primary\" data-record-sync hidden style=\"display:none\">Synchronize</button></p><noscript><p>Enable JavaScript to compare this record.</p></noscript></div>"
+msgstr ""
+
+msgid "<p><button type=\"button\" class=\"button\" data-wd29-link-retry hidden style=\"display:none\">Check link</button></p>"
+msgstr ""
+
+msgid "<p><label>Batch offset <input type=\"number\" min=\"0\" name=\"offset\" value=\"0\"></label> Each batch contains up to 10 records per store.</p>"
+msgstr ""
+
+msgid "<p><label>License key <input name=\"licence_key\" autocomplete=\"off\" spellcheck=\"false\" placeholder=\"WD29-XXXX-XXXX-XXXX-XXXX\" value=\"\"></label></p>"
+msgstr ""
+
+msgid "<p><label>Product or variation identity <input name=\"gallery_record\" placeholder=\"ps:product:123\"></label> <button class=\"button\" name=\"bridge_action\" value=\"restore_gallery\">Reattach detached images</button></p><p>Reattaches retained images for this record, then captures the product.</p>"
+msgstr ""
+
+msgid "<p><label>Shared secret <input type=\"password\" name=\"secret\" autocomplete=\"new-password\" value=\"\"></label> Leave blank to keep the saved secret.</p>"
+msgstr ""
+
+msgid "<p><label>Simultaneous catalogue changes <select name=\"conflict_policy\">"
+msgstr ""
+
+msgid "<p><strong>Comparison and synchronization</strong></p><p class=\"wd29-record-description\" style=\"font-size:13px;color:#646970\">Save your changes before comparing. Only saved data is synchronized"
+msgstr ""
+
+msgid "<p><strong>Webhook for this store:</strong> <code>"
+msgstr ""
+
+msgid "<p>Last saved message (see diagnostics for the current state): "
+msgstr ""
+
+msgid "<p>No original orders from "
+msgstr ""
+
+msgid "<p>No original records in this batch.</p>"
+msgstr ""
+
+msgid "<p>Sign in to your Shopify customer account to see your benefits.</p>"
+msgstr ""
+
+msgid "<p>These benefits can be redeemed in KerAwen POS and sites connected to the same program. Redemption at Shopify checkout is not enabled.</p>"
+msgstr ""
+
+msgid "<p>Your benefits are temporarily unavailable. Please try again later.</p>"
+msgstr ""
+
+msgid "<small>Copy could not be read: review on "
+msgstr ""
+
+msgid "<small>Quantities differ: see stock events in Activity.</small>"
+msgstr ""
+
+msgid "<small>Reference: "
+msgstr ""
+
+msgid "<span>Synchronized status: "
+msgstr ""
+
+msgid "<table class=\"widefat\" id=\"wd29-field-rows\"><thead><tr><th>Exchange name</th><th>Source</th><th>Local metadata or ACF key</th><th>Applies to</th><th></th></tr></thead><tbody>"
+msgstr ""
+
+msgid "<td><input aria-label=\"Exchange name\" name=\""
+msgstr ""
+
+msgid "<tr><th>Images for newly exported products</th><td><label><input type=\"checkbox\" name=\"export_media\" value=\"1\" "
+msgstr ""
+
+msgid "> Copy images when first creating a product on Shopify (up to 20 public JPEG, PNG or WebP images from this store; existing galleries retained)</label></td></tr>"
+msgstr ""
+
+msgid "> Create native customer accounts for registered customers from the other store (independent passwords, no merging by email)</label></p>"
+msgstr ""
+
+msgid "> Detach imported images removed from the partner store (retain files and manually added images)</label></p>"
+msgstr ""
+
+msgid "> Show KerAwen points and benefits in the WooCommerce customer account (read only)</label></p>"
+msgstr ""
+
+msgid "A source product was not found. Check its latest snapshot and database availability; keep the original mapping. Archiving will be retried; the source will not be recreated."
+msgstr ""
+
+msgid "Access denied."
+msgstr ""
+
+msgid "Account on "
+msgstr ""
+
+msgid "Action not completed: "
+msgstr ""
+
+msgid "Action not completed: native_operation_failed"
+msgstr ""
+
+msgid "Action not confirmed. Refresh the comparison and check diagnostics."
+msgstr ""
+
+msgid "Action not confirmed. Refresh to check the result and review diagnostics."
+msgstr ""
+
+msgid "Action required: see the items below."
+msgstr ""
+
+msgid "Activity"
+msgstr ""
+
+msgid "Add a WooCommerce tax class with a base rate matching the incoming rate. Check the base country and VAT rules."
+msgstr ""
+
+msgid "Addresses"
+msgstr ""
+
+msgid "Admin API token"
+msgstr ""
+
+msgid "Advanced connector configuration"
+msgstr ""
+
+msgid "All pairs in use"
+msgstr ""
+
+msgid "All tracked records"
+msgstr ""
+
+msgid "Already synchronized"
+msgstr ""
+
+msgid "Already synchronized."
+msgstr ""
+
+msgid "Amounts, statuses and line mappings"
+msgstr ""
+
+msgid "An active license is required for automatic updates (plugins.inklura.fr/compte)."
+msgstr ""
+
+msgid "App client secret"
+msgstr ""
+
+msgid "App in your own Shopify organization (token renewed automatically)"
+msgstr ""
+
+msgid "Archive SHA-256 mismatch: update cancelled."
+msgstr ""
+
+msgid "Archived"
+msgstr ""
+
+msgid "Attempts"
+msgstr ""
+
+msgid "Attributes"
+msgstr ""
+
+msgid "Audit mode"
+msgstr ""
+
+msgid "Audit mode · license"
+msgstr ""
+
+msgid "Audit: read and queue only"
+msgstr ""
+
+msgid "Audit: receive without applying"
+msgstr ""
+
+msgid "Authentication"
+msgstr ""
+
+msgid "Automatic (PrestaShop: "
+msgstr ""
+
+msgid "Automatic processing stopped"
+msgstr ""
+
+msgid "Batch captured: "
+msgstr ""
+
+msgid "Benefit"
+msgstr ""
+
+msgid "Billing"
+msgstr ""
+
+msgid "Billing address / default Shopify address"
+msgstr ""
+
+msgid "Both directions"
+msgstr ""
+
+msgid "Brands"
+msgstr ""
+
+msgid "Cancelled"
+msgstr ""
+
+msgid "Catalogue conflicts requeued with the selected priority."
+msgstr ""
+
+msgid "Catalogue conflicts to retry"
+msgstr ""
+
+msgid "Catalogue tracked on "
+msgstr ""
+
+msgid "Catalogue, contacts and orders as selected; existing quantities retained."
+msgstr ""
+
+msgid "Catalogues: WordPress ↔ PrestaShop"
+msgstr ""
+
+msgid "Changes available"
+msgstr ""
+
+msgid "Check HTTPS access to the partner store and the shared configuration; a successful exchange clears the alert."
+msgstr ""
+
+msgid "Check again"
+msgstr ""
+
+msgid "Check both workers and earlier failed or conflicting events for this record; allow subsequent batches to run."
+msgstr ""
+
+msgid "Check connection"
+msgstr ""
+
+msgid "Check required"
+msgstr ""
+
+msgid "Check the license in your customer account."
+msgstr ""
+
+msgid "Check the log and partner store status. Automatic retries stop after eight attempts."
+msgstr ""
+
+msgid "Check variation removal in the destination admin before synchronizing."
+msgstr ""
+
+msgid "Checking the PrestaShop product page…"
+msgstr ""
+
+msgid "Choose an original record from the source store."
+msgstr ""
+
+msgid "Choose the priority store"
+msgstr ""
+
+msgid "Company"
+msgstr ""
+
+msgid "Compare and synchronize"
+msgstr ""
+
+msgid "Compare both versions; choose catalogue priority (products only), then retry the reviewed conflict."
+msgstr ""
+
+msgid "Compare differences and catch up an order even when stopped"
+msgstr ""
+
+msgid "Compare saved data before synchronizing."
+msgstr ""
+
+msgid "Compare versions before retrying"
+msgstr ""
+
+msgid "Comparing saved data…"
+msgstr ""
+
+msgid "Comparison or synchronization could not be confirmed. Refresh the comparison and check Inklura Sync diagnostics."
+msgstr ""
+
+msgid "Comparison refreshed."
+msgstr ""
+
+msgid "Comparison timed out. Try again."
+msgstr ""
+
+msgid "Comparison unavailable. Check the connection, update both connectors, then try again."
+msgstr ""
+
+msgid "Comparison unavailable. Refresh the page or check diagnostics."
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
+msgid "Configure webhooks"
+msgstr ""
+
+msgid "Configured partner store"
+msgstr ""
+
+msgid "Confirm synchronization of this record."
+msgstr ""
+
+msgid "Confirmation required."
+msgstr ""
+
+msgid "Conflict needs review before synchronization."
+msgstr ""
+
+msgid "Connection and synchronization rules"
+msgstr ""
+
+msgid "Connection verified. Choose a location before enabling synchronization."
+msgstr ""
+
+msgid "Connector table"
+msgstr ""
+
+msgid "Contact removed or unavailable."
+msgstr ""
+
+msgid "Contacts received on "
+msgstr ""
+
+msgid "Contacts: WordPress ↔ PrestaShop"
+msgstr ""
+
+msgid "Copies from "
+msgstr ""
+
+msgid "Copies to edit on their source store"
+msgstr ""
+
+msgid "Copy"
+msgstr ""
+
+msgid "Copy imported from PrestaShop"
+msgstr ""
+
+msgid "Copy log"
+msgstr ""
+
+msgid "Copy missing"
+msgstr ""
+
+msgid "Copy missing on "
+msgstr ""
+
+msgid "Copy missing."
+msgstr ""
+
+msgid "Copy missing: ready to create."
+msgstr ""
+
+msgid "Copy on "
+msgstr ""
+
+msgid "Create new WooCommerce customers on Shopify"
+msgstr ""
+
+msgid "Create new compatible WooCommerce codes on Shopify"
+msgstr ""
+
+msgid "Create new simple and variable WooCommerce products on Shopify (draft)"
+msgstr ""
+
+msgid "Create on "
+msgstr ""
+
+msgid "Created"
+msgstr ""
+
+msgid "Created on "
+msgstr ""
+
+msgid "Credit note"
+msgstr ""
+
+msgid "Currency"
+msgstr ""
+
+msgid "Custom field mappings saved."
+msgstr ""
+
+msgid "Custom fields"
+msgstr ""
+
+msgid "Customer"
+msgstr ""
+
+msgid "Customer account origin needs review."
+msgstr ""
+
+msgid "Customer contacts"
+msgstr ""
+
+msgid "Customer indisponible."
+msgstr ""
+
+msgid "Customer mapping needs review."
+msgstr ""
+
+msgid "Customer records"
+msgstr ""
+
+msgid "Data retained here · edit on the source store"
+msgstr ""
+
+msgid "Differences: "
+msgstr ""
+
+msgid "Direction"
+msgstr ""
+
+msgid "Disabled"
+msgstr ""
+
+msgid "Discount voucher"
+msgstr ""
+
+msgid "Edit custom fields"
+msgstr ""
+
+msgid "Enable taxes in WooCommerce → Settings → General, then configure rates in the Tax tab. Incoming prices are retained; VAT is never guessed."
+msgstr ""
+
+msgid "Enter the license key (plugins.inklura.fr/compte) before "
+msgstr ""
+
+msgid "Enter the partner HTTPS webhook URL and shared secret before enabling synchronization."
+msgstr ""
+
+msgid "Enter your license key (customer account at plugins.inklura.fr/compte). "
+msgstr ""
+
+msgid "Equivalent order updates requeued: "
+msgstr ""
+
+msgid "Error"
+msgstr ""
+
+msgid "Event log"
+msgstr ""
+
+msgid "Event requeued; conflict checks remain active."
+msgstr ""
+
+msgid "Events for "
+msgstr ""
+
+msgid "Events to process"
+msgstr ""
+
+msgid "Exactly one record is required."
+msgstr ""
+
+msgid "Exchanged snapshots · originals and imported copies · displays up to 200 products"
+msgstr ""
+
+msgid "Excl. tax"
+msgstr ""
+
+msgid "Existing offline Admin API token"
+msgstr ""
+
+msgid "Expiry"
+msgstr ""
+
+msgid "Explicit direction: WordPress → PrestaShop or PrestaShop → WordPress"
+msgstr ""
+
+msgid "Export a compatible discount code"
+msgstr ""
+
+msgid "Export a customer"
+msgstr ""
+
+msgid "Export a simple or variable product"
+msgstr ""
+
+msgid "Failed"
+msgstr ""
+
+msgid "Failed events"
+msgstr ""
+
+msgid "Failed events requeued."
+msgstr ""
+
+msgid "Failures and conflicts"
+msgstr ""
+
+msgid "Fetch from "
+msgstr ""
+
+msgid "Field list saved. Capture the catalogues to synchronize the selected fields."
+msgstr ""
+
+msgid "Finished · "
+msgstr ""
+
+msgid "Fix the error shown in the log, then retry. Subsequent events for the same record remain blocked."
+msgstr ""
+
+msgid "From → to"
+msgstr ""
+
+msgid "Gallery images reattached; product captured."
+msgstr ""
+
+msgid "Gift card"
+msgstr ""
+
+msgid "Guest contact"
+msgstr ""
+
+msgid "Historical tax basis unknown"
+msgstr ""
+
+msgid "Identifiers"
+msgstr ""
+
+msgid "Identity"
+msgstr ""
+
+msgid "Import Shopify collections as categories (add without removal)"
+msgstr ""
+
+msgid "Import Shopify images (add without removal)"
+msgstr ""
+
+msgid "Import Shopify shipments, refunds and payments as read-only copies"
+msgstr ""
+
+msgid "Import orders as read-only copies"
+msgstr ""
+
+msgid "Import registered customers"
+msgstr ""
+
+msgid "Imported copy"
+msgstr ""
+
+msgid "Incl. tax"
+msgstr ""
+
+msgid "Incoming prices do not specify VAT while WooCommerce uses taxes. Configure source store tax settings before sending the product again."
+msgstr ""
+
+msgid "Incomplete comparison."
+msgstr ""
+
+msgid "Information read from KerAwen in real time."
+msgstr ""
+
+msgid "Initial stock"
+msgstr ""
+
+msgid "Interrupted · "
+msgstr ""
+
+msgid "Invalid VAT rate."
+msgstr ""
+
+msgid "Invalid batch size."
+msgstr ""
+
+msgid "Invalid comparison."
+msgstr ""
+
+msgid "Invalid confirmation. Refresh the comparison."
+msgstr ""
+
+msgid "Invalid conflict policy."
+msgstr ""
+
+msgid "Invalid customer origin."
+msgstr ""
+
+msgid "Invalid descriptor."
+msgstr ""
+
+msgid "Invalid destination status."
+msgstr ""
+
+msgid "Invalid direction."
+msgstr ""
+
+msgid "Invalid license key: expected format WD29-XXXX-XXXX-XXXX-XXXX."
+msgstr ""
+
+msgid "Invalid license signature."
+msgstr ""
+
+msgid "Invalid mapping row."
+msgstr ""
+
+msgid "Invalid mode."
+msgstr ""
+
+msgid "Invalid page."
+msgstr ""
+
+msgid "Invalid processing position."
+msgstr ""
+
+msgid "Invalid product to inspect."
+msgstr ""
+
+msgid "Invalid product."
+msgstr ""
+
+msgid "Invalid record type."
+msgstr ""
+
+msgid "Invalid request."
+msgstr ""
+
+msgid "Invalid snapshot."
+msgstr ""
+
+msgid "Invalid source identity."
+msgstr ""
+
+msgid "Invalid status mappings."
+msgstr ""
+
+msgid "Invalid variation preview."
+msgstr ""
+
+msgid "KerAwen information is temporarily unavailable. Please try again later."
+msgstr ""
+
+msgid "KerAwen loyalty and benefits"
+msgstr ""
+
+msgid "Key"
+msgstr ""
+
+msgid "Key "
+msgstr ""
+
+msgid "Key removed from this store."
+msgstr ""
+
+msgid "Key removed locally; license server unreachable. Release the pair in your customer account."
+msgstr ""
+
+msgid "Key removed."
+msgstr ""
+
+msgid "Key saved."
+msgstr ""
+
+msgid "Key, status and updates"
+msgstr ""
+
+msgid "Last check"
+msgstr ""
+
+msgid "Latest transmitted snapshots · displays up to 200 products"
+msgstr ""
+
+msgid "License"
+msgstr ""
+
+msgid "License active"
+msgstr ""
+
+msgid "License and updates"
+msgstr ""
+
+msgid "License check skipped: "
+msgstr ""
+
+msgid "License checked."
+msgstr ""
+
+msgid "License expired"
+msgstr ""
+
+msgid "License response belongs to another store or key."
+msgstr ""
+
+msgid "License response expired: check the server clock."
+msgstr ""
+
+msgid "License response is older than the last response received."
+msgstr ""
+
+msgid "License revoked"
+msgstr ""
+
+msgid "License server must use HTTPS."
+msgstr ""
+
+msgid "License server unavailable (HTTP "
+msgstr ""
+
+msgid "License server unreachable."
+msgstr ""
+
+msgid "License · "
+msgstr ""
+
+msgid "Limited preview; check the report for other variations."
+msgstr ""
+
+msgid "Lines"
+msgstr ""
+
+msgid "Linked customer accounts"
+msgstr ""
+
+msgid "Live mode is paused by the license ("
+msgstr ""
+
+msgid "Live mode is paused: synchronization is running in audit mode."
+msgstr ""
+
+msgid "Live synchronization"
+msgstr ""
+
+msgid "Local ID"
+msgstr ""
+
+msgid "Local account (ID)"
+msgstr ""
+
+msgid "Local change or conflict to review"
+msgstr ""
+
+msgid "Local change or conflict: check reports."
+msgstr ""
+
+msgid "Local total / status / lines"
+msgstr ""
+
+msgid "Log copied"
+msgstr ""
+
+msgid "Loyalty points:"
+msgstr ""
+
+msgid "Loyalty voucher"
+msgstr ""
+
+msgid "Main supplier"
+msgstr ""
+
+msgid "Mappings between PrestaShop and WooCommerce"
+msgstr ""
+
+msgid "Matching public product page found on PrestaShop."
+msgstr ""
+
+msgid "Method not allowed."
+msgstr ""
+
+msgid "Name"
+msgstr ""
+
+msgid "Native account mappings"
+msgstr ""
+
+msgid "Native account updates disabled."
+msgstr ""
+
+msgid "Native customer account changed: conflict needs review."
+msgstr ""
+
+msgid "Native customer account linked, with no local changes detected."
+msgstr ""
+
+msgid "Native customer account missing."
+msgstr ""
+
+msgid "Native customer account status needs review."
+msgstr ""
+
+msgid "Native customer account up to date."
+msgstr ""
+
+msgid "Next"
+msgstr ""
+
+msgid "No PrestaShop store connected."
+msgstr ""
+
+msgid "No issues detected"
+msgstr ""
+
+msgid "No items to display yet."
+msgstr ""
+
+msgid "No key"
+msgstr ""
+
+msgid "No matching public product page on PrestaShop. The product may be missing or unpublished."
+msgstr ""
+
+msgid "No native customer account linked."
+msgstr ""
+
+msgid "No partner store connected."
+msgstr ""
+
+msgid "No records from this origin in this report."
+msgstr ""
+
+msgid "Not yet applied on "
+msgstr ""
+
+msgid "Nothing needs attention."
+msgstr ""
+
+msgid "On hold"
+msgstr ""
+
+msgid "Only original orders from this store can be sent."
+msgstr ""
+
+msgid "Open settings"
+msgstr ""
+
+msgid "Order"
+msgstr ""
+
+msgid "Order #"
+msgstr ""
+
+msgid "Order comparison refreshed."
+msgstr ""
+
+msgid "Order conflicts"
+msgstr ""
+
+msgid "Order is busy."
+msgstr ""
+
+msgid "Order mapping needs review."
+msgstr ""
+
+msgid "Order not applied: "
+msgstr ""
+
+msgid "Order not found."
+msgstr ""
+
+msgid "Order not submitted or unavailable."
+msgstr ""
+
+msgid "Order origin differs."
+msgstr ""
+
+msgid "Order statuses"
+msgstr ""
+
+msgid "Order synchronized to "
+msgstr ""
+
+msgid "Order unavailable."
+msgstr ""
+
+msgid "Orders"
+msgstr ""
+
+msgid "Orders on this store · original and copy identified"
+msgstr ""
+
+msgid "Orders to review"
+msgstr ""
+
+msgid "Orders to synchronize"
+msgstr ""
+
+msgid "Orders tracked on "
+msgstr ""
+
+msgid "Orders: WordPress ↔ PrestaShop"
+msgstr ""
+
+msgid "Ordinary discount codes"
+msgstr ""
+
+msgid "Origin"
+msgstr ""
+
+msgid "Original product unavailable."
+msgstr ""
+
+msgid "Originals created on "
+msgstr ""
+
+msgid "Overview"
+msgstr ""
+
+msgid "PHP cURL extension missing."
+msgstr ""
+
+msgid "PHP sodium extension missing: license response cannot be verified."
+msgstr ""
+
+msgid "POST required."
+msgstr ""
+
+msgid "Pairs in use"
+msgstr ""
+
+msgid "Parent product activity: "
+msgstr ""
+
+msgid "Partner configured"
+msgstr ""
+
+msgid "Partner connection is incomplete."
+msgstr ""
+
+msgid "Partner store"
+msgstr ""
+
+msgid "Partner store not configured"
+msgstr ""
+
+msgid "Partner store not connected."
+msgstr ""
+
+msgid "Pause for review"
+msgstr ""
+
+msgid "Payment pending"
+msgstr ""
+
+msgid "Payments"
+msgstr ""
+
+msgid "Pending payment"
+msgstr ""
+
+msgid "Phone"
+msgstr ""
+
+msgid "Plan"
+msgstr ""
+
+msgid "Plugin directory"
+msgstr ""
+
+msgid "PrestaShop takes priority"
+msgstr ""
+
+msgid "Previous"
+msgstr ""
+
+msgid "Price"
+msgstr ""
+
+msgid "Priority: "
+msgstr ""
+
+msgid "Process WordPress events"
+msgstr ""
+
+msgid "Processing"
+msgstr ""
+
+msgid "Processing finished. See the worker result below."
+msgstr ""
+
+msgid "Processing is in progress. Try again shortly."
+msgstr ""
+
+msgid "Processing is in progress. Try again."
+msgstr ""
+
+msgid "Processing status and items to review"
+msgstr ""
+
+msgid "Processing unavailable."
+msgstr ""
+
+msgid "Product"
+msgstr ""
+
+msgid "Product identity does not match the mapping."
+msgstr ""
+
+msgid "Product unavailable."
+msgstr ""
+
+msgid "Products, orders and contacts · both directions"
+msgstr ""
+
+msgid "Products, variations and metadata"
+msgstr ""
+
+msgid "Publish new active products (otherwise: draft)"
+msgstr ""
+
+msgid "Purchase excluding tax"
+msgstr ""
+
+msgid "Purchase price excluding tax"
+msgstr ""
+
+msgid "Queue processed: see the result below."
+msgstr ""
+
+msgid "Queue processing, captures and retries"
+msgstr ""
+
+msgid "Reading synchronization status…"
+msgstr ""
+
+msgid "Received total / status / lines"
+msgstr ""
+
+msgid "Record added to the Shopify export queue."
+msgstr ""
+
+msgid "Record applied; check confirmation or new source changes."
+msgstr ""
+
+msgid "Record creation"
+msgstr ""
+
+msgid "Record is busy."
+msgstr ""
+
+msgid "Record not applied: "
+msgstr ""
+
+msgid "Record on "
+msgstr ""
+
+msgid "Record origin needs review."
+msgstr ""
+
+msgid "Record synchronized to "
+msgstr ""
+
+msgid "Record synchronized. Refresh the comparison."
+msgstr ""
+
+msgid "Record unavailable or access denied."
+msgstr ""
+
+msgid "Refresh the comparison to confirm this record type and direction."
+msgstr ""
+
+msgid "Refunded"
+msgstr ""
+
+msgid "Refunds"
+msgstr ""
+
+msgid "Refunds and credit notes"
+msgstr ""
+
+msgid "Registered contact"
+msgstr ""
+
+msgid "Remote product not published: no public product page available on PrestaShop."
+msgstr ""
+
+msgid "Replace key"
+msgstr ""
+
+msgid "Reports"
+msgstr ""
+
+msgid "Response unavailable or session expired. Reload and restart: records already applied will be recognized."
+msgstr ""
+
+msgid "Retry"
+msgstr ""
+
+msgid "Retry catalogue conflicts with the selected priority"
+msgstr ""
+
+msgid "Retry equivalent order updates"
+msgstr ""
+
+msgid "Retry failures"
+msgstr ""
+
+msgid "Review failed or retrying events and server logs, then run the worker again."
+msgstr ""
+
+msgid "Review this record and its capture message; fix unsupported or invalid fields. A successful new capture clears the alert."
+msgstr ""
+
+msgid "Run the server worker every minute; check its exit code and PHP and database availability."
+msgstr ""
+
+msgid "Save"
+msgstr ""
+
+msgid "Save key"
+msgstr ""
+
+msgid "Saved changes need synchronization."
+msgstr ""
+
+msgid "Saved changes ready to synchronize."
+msgstr ""
+
+msgid "Saved variations synchronize with their product. Existing quantities follow stock events and are not forced by this action."
+msgstr ""
+
+msgid "Session expired or access denied. Refresh the page."
+msgstr ""
+
+msgid "Session expired. Refresh the page."
+msgstr ""
+
+msgid "Set unknown Woo variation quantities to zero"
+msgstr ""
+
+msgid "Settings"
+msgstr ""
+
+msgid "Settings saved."
+msgstr ""
+
+msgid "Shipments"
+msgstr ""
+
+msgid "Shipping"
+msgstr ""
+
+msgid "Shopify benefits page path"
+msgstr ""
+
+msgid "Shopify location (ID or gid://shopify/Location/…)"
+msgstr ""
+
+msgid "Shopify: cancelled"
+msgstr ""
+
+msgid "Shopify: paid"
+msgstr ""
+
+msgid "Shopify: pending"
+msgstr ""
+
+msgid "Shopify: refunded"
+msgstr ""
+
+msgid "Show KerAwen benefits for the signed-in Shopify customer (read only)"
+msgstr ""
+
+msgid "Show on "
+msgstr ""
+
+msgid "Some variations are missing from the source. Check their removal in the destination admin before synchronizing."
+msgstr ""
+
+msgid "Source customer"
+msgstr ""
+
+msgid "Source identity differs."
+msgstr ""
+
+msgid "Source needs review"
+msgstr ""
+
+msgid "Source tax information missing"
+msgstr ""
+
+msgid "Source unavailable"
+msgstr ""
+
+msgid "Source unavailable."
+msgstr ""
+
+msgid "State"
+msgstr ""
+
+msgid "Status"
+msgstr ""
+
+msgid "Status mappings saved; mirrors updated: "
+msgstr ""
+
+msgid "Stock differs. "
+msgstr ""
+
+msgid "Stock movements use the synchronization queue; this action does not force equal quantities."
+msgstr ""
+
+msgid "Stop requested: finishing the current record…"
+msgstr ""
+
+msgid "Stopped"
+msgstr ""
+
+msgid "Stopped · "
+msgstr ""
+
+msgid "Store *.myshopify.com"
+msgstr ""
+
+msgid "Supplier"
+msgstr ""
+
+msgid "Supplier reference"
+msgstr ""
+
+msgid "Sync directory only; no native account updated."
+msgstr ""
+
+msgid "Synchronization active"
+msgstr ""
+
+msgid "Synchronization confirmed. Checking status…"
+msgstr ""
+
+msgid "Synchronization not confirmed."
+msgstr ""
+
+msgid "Synchronization stopped"
+msgstr ""
+
+msgid "Synchronization unavailable: check status and reports."
+msgstr ""
+
+msgid "Synchronize a batch"
+msgstr ""
+
+msgid "Synchronize ordinary discount codes without usage limits (discounts permissions required)"
+msgstr ""
+
+msgid "Synchronize physical / virtual variation type (catalogue direction)"
+msgstr ""
+
+msgid "Synchronize product tags (catalogue direction)"
+msgstr ""
+
+msgid "Synchronize saved data to "
+msgstr ""
+
+msgid "Synchronized contact unavailable."
+msgstr ""
+
+msgid "Synchronized data is up to date."
+msgstr ""
+
+msgid "Tags"
+msgstr ""
+
+msgid "Tax"
+msgstr ""
+
+msgid "Tax group to map"
+msgstr ""
+
+msgid "Test connection"
+msgstr ""
+
+msgid "The PrestaShop link will be checked when this panel opens."
+msgstr ""
+
+msgid "The copy changed or a conflict exists. Check reports."
+msgstr ""
+
+msgid "The data changed. Refresh and confirm again."
+msgstr ""
+
+msgid "The destination changed. Refresh the comparison."
+msgstr ""
+
+msgid "The destination store requires permission to synchronize."
+msgstr ""
+
+msgid "The key could not be verified yet. "
+msgstr ""
+
+msgid "The latest 100 events and their results"
+msgstr ""
+
+msgid "The license server has not responded for several days ("
+msgstr ""
+
+msgid "The link cannot be checked right now."
+msgstr ""
+
+msgid "The local copy or its queue has a conflict. Check reports before synchronizing."
+msgstr ""
+
+msgid "The local customer account changed. Check reports."
+msgstr ""
+
+msgid "The mapping changed. Refresh the comparison."
+msgstr ""
+
+msgid "The partner store cannot be checked right now. Try again."
+msgstr ""
+
+msgid "The reports below concern "
+msgstr ""
+
+msgid "The response timed out. Refresh to check the result before retrying."
+msgstr ""
+
+msgid "The shared secret must contain at least 32 characters."
+msgstr ""
+
+msgid "The source changed. Refresh the comparison."
+msgstr ""
+
+msgid "The source order changed. Refresh the comparison."
+msgstr ""
+
+msgid "The status compares the Sync contact directory. Native customer accounts are only updated if that option is enabled at the destination."
+msgstr ""
+
+msgid "The terms of each benefit are checked when it is redeemed in KerAwen."
+msgstr ""
+
+msgid "The worker has not run for more than five minutes: add the server scheduled task (once a minute, see OPERATIONS.md)."
+msgstr ""
+
+msgid "This Shopify code is paused while its rules are reviewed."
+msgstr ""
+
+msgid "This admin"
+msgstr ""
+
+msgid "This customer account is disabled."
+msgstr ""
+
+msgid "This product has no synchronized mapping yet."
+msgstr ""
+
+msgid "This product is no longer available."
+msgstr ""
+
+msgid "This record can be created on the destination store."
+msgstr ""
+
+msgid "This record cannot be compared right now."
+msgstr ""
+
+msgid "This record cannot be synchronized."
+msgstr ""
+
+msgid "This record is already up to date."
+msgstr ""
+
+msgid "This store already has mappings to another partner: changing partners requires migration of its private tables."
+msgstr ""
+
+msgid "To resolve"
+msgstr ""
+
+msgid "Track records from the source store"
+msgstr ""
+
+msgid "Tracking status"
+msgstr ""
+
+msgid "Unable to check the link. Try again."
+msgstr ""
+
+msgid "Unexpected license server response (HTTP "
+msgstr ""
+
+msgid "Unexpected package URL."
+msgstr ""
+
+msgid "Unit cost excluding tax, synchronized with PrestaShop. Leave blank if unknown."
+msgstr ""
+
+msgid "Unknown key"
+msgstr ""
+
+msgid "Unknown manual operation."
+msgstr ""
+
+msgid "Unknown operation."
+msgstr ""
+
+msgid "Unknown state"
+msgstr ""
+
+msgid "Unlinked lines"
+msgstr ""
+
+msgid "Unrecognized license response."
+msgstr ""
+
+msgid "Unverified key"
+msgstr ""
+
+msgid "Up to date"
+msgstr ""
+
+msgid "Update available on "
+msgstr ""
+
+msgid "Update on "
+msgstr ""
+
+msgid "Update unavailable: inactive license or server unreachable. Download the archive from plugins.inklura.fr/compte."
+msgstr ""
+
+msgid "VAT rate confirmed: "
+msgstr ""
+
+msgid "VAT rate to confirm"
+msgstr ""
+
+msgid "Valid until"
+msgstr ""
+
+msgid "Value"
+msgstr ""
+
+msgid "Values received from WooCommerce"
+msgstr ""
+
+msgid "Variation"
+msgstr ""
+
+msgid "Variation images"
+msgstr ""
+
+msgid "Variations were removed from the source. Check their removal in the destination admin before synchronizing."
+msgstr ""
+
+msgid "Version received from "
+msgstr ""
+
+msgid "View activity"
+msgstr ""
+
+msgid "Webhooks configured: "
+msgstr ""
+
+msgid "Without a verified key, live mode remains available until "
+msgstr ""
+
+msgid "Woo metadata"
+msgstr ""
+
+msgid "WooCommerce VAT rate missing"
+msgstr ""
+
+msgid "WooCommerce and ACF metadata mappings"
+msgstr ""
+
+msgid "WooCommerce and the PHP cURL extension are required."
+msgstr ""
+
+msgid "WooCommerce takes priority"
+msgstr ""
+
+msgid "WooCommerce taxes disabled"
+msgstr ""
+
+msgid "Write permission is required for this manual synchronization."
+msgstr ""
+
+msgid "Write permission is required."
+msgstr ""
+
+msgid "You are here · this admin"
+msgstr ""
+
+msgid "You are viewing the imported copy; changes come from PrestaShop."
+msgstr ""
+
+msgid "added"
+msgstr ""
+
+msgid "amounts"
+msgstr ""
+
+msgid "apply the same priority on the partner store"
+msgstr ""
+
+msgid "catalogue conflicts retried"
+msgstr ""
+
+msgid "contact details"
+msgstr ""
+
+msgid "identity"
+msgstr ""
+
+msgid "metadata"
+msgstr ""
+
+msgid "modified"
+msgstr ""
+
+msgid "removal to check in the admin"
+msgstr ""
+
+msgid "same priority applied on the partner store"
+msgstr ""
+
+msgid "stopped"
+msgstr ""
+
+msgid "to review"
+msgstr ""
+
+
+msgid "<p>Page unavailable.</p>"
+msgstr ""

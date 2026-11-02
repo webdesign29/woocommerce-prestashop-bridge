@@ -1,5 +1,59 @@
 *** Inklura Sync Changelog ***
 
+2026-11-02 - version 0.8.13
+* English-default WooCommerce admin, French translation catalogue, and explicit report display limits.
+* Marketplace edition has no catalogue-size cap; no separate Inklura subscription or key.
+
+2026-10-21 - version 0.8.12
+* Coordinated direct release of Shopify synchronization and Commerce Pro transport; preserve configuration and history.
+* Ordinary discount creation works on stores without subscriptions.
+
+2026-10-21 - version 0.8.11
+* Match Shopify media and product-image identities before reusing native attachments.
+
+2026-10-21 - version 0.8.10
+* Preserve original native identities when webhooks arrive before export creation recovery completes.
+
+2026-10-21 - version 0.8.9
+* Optional initial product photo export with source snapshots, processing checks and native attachment reuse.
+
+2026-10-21 - version 0.8.8
+* Shopify navigation and setup guidance; current capability and service disclosures; Marketplace description translation.
+
+2026-10-20 - version 0.8.7
+* Source order history, physical/virtual shipping flags and special-product guards.
+
+2026-10-20 - version 0.8.6
+* Compatible unlimited promotions and signed customer-scoped read-only KerAwen account page.
+
+2026-10-20 - version 0.8.5
+* Initialize new tag baselines correctly and defer unavailable native media storage.
+
+2026-10-20 - version 0.8.4
+* Upgrade unchanged legacy address baselines without accepting unobserved edits.
+
+2026-10-20 - version 0.8.3
+* Variable product creation, configurable default-address export, tag sync and additive Shopify image/collection imports.
+
+2026-10-20 - version 0.8.2
+* Verify product-update error fields and synchronize taxable flags without inferring VAT rates.
+
+2026-10-20 - version 0.8.1
+* Match the verified Shopify 2026-10 inventory comparison input without discarding pending retries.
+
+2026-10-20 - version 0.8.0
+* Shopify connection, durable recovery, products, customers, stock movements and consultation order copies.
+
+2026-10-20 - version 0.7.11
+* Signed Commerce Pro financial transport and server-verified source-order proofs.
+
+2026-10-20 - version 0.7.10
+* Preserve registered customer identity on mirrored orders and verify native mirrors before updates.
+
+2026-10-20 - version 0.7.5
+* Prevent stale outgoing catalogue snapshots from undoing an accepted import; preserve stock and order queues.
+
+
 2026-10-15 - version 0.7.4
 * Fixed - Preserve native database mutation status while retrying fiscal events, preventing false HTTP 500 responses when deleting WooCommerce tax rates.
 * Added - Native REST tax CRUD coverage with empty and waiting queues in disabled, audit and live modes.

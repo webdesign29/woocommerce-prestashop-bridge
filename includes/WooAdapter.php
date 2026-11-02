@@ -1,5 +1,6 @@
 <?php
 namespace WD29\Bridge;
+require_once __DIR__ . '/I18n.php';
 
 final class WooAdapter
 {
@@ -55,35 +56,35 @@ final class WooAdapter
         if ($nativeId < 1 || !in_array($kind, ['product','order','customer'], true)) { throw new \RuntimeException('Fiche indisponible.'); }
         if ($kind === 'customer') {
             $user = get_userdata($nativeId);
-            if (!$user || !in_array('customer', (array) $user->roles, true)) { throw new \RuntimeException('Client indisponible.'); }
+            if (!$user || !in_array('customer', (array) $user->roles, true)) { throw new \RuntimeException(\WD29\Bridge\I18n::t('Customer indisponible.')); }
             $origin = get_user_meta($nativeId, '_wd29_bridge_customer_origin', true);
-            if (!is_string($origin)) { throw new \RuntimeException('Origine client invalide.'); }
+            if (!is_string($origin)) { throw new \RuntimeException(\WD29\Bridge\I18n::t('Invalid customer origin.')); }
             $link = $this->engine->sql('SELECT record_key FROM {b}account_links WHERE native_id=? LIMIT 1', [$nativeId])[0] ?? null;
             if ($origin !== '') {
-                if (!preg_match('/^ps:customer:[1-9][0-9]{0,14}$/D', $origin) || !$link || $link['record_key'] !== $origin) { throw new \RuntimeException('Correspondance client à vérifier.'); }
+                if (!preg_match('/^ps:customer:[1-9][0-9]{0,14}$/D', $origin) || !$link || $link['record_key'] !== $origin) { throw new \RuntimeException(\WD29\Bridge\I18n::t('Customer mapping needs review.')); }
                 $map = $this->engine->sql('SELECT kind,local_id FROM {b}map WHERE record_key=? LIMIT 1', [$origin])[0] ?? null;
                 $contact = $map && $map['kind'] === 'customer' ? ($this->engine->sql('SELECT record_key FROM {b}contacts WHERE id=? LIMIT 1', [(int) $map['local_id']])[0] ?? null) : null;
-                if (!$contact || $contact['record_key'] !== $origin) { throw new \RuntimeException('Contact synchronisé indisponible.'); }
+                if (!$contact || $contact['record_key'] !== $origin) { throw new \RuntimeException(\WD29\Bridge\I18n::t('Synchronized contact unavailable.')); }
                 return $origin;
             }
-            if ($link) { throw new \RuntimeException('Origine du compte client à vérifier.'); }
+            if ($link) { throw new \RuntimeException(\WD29\Bridge\I18n::t('Customer account origin needs review.')); }
             return Protocol::key('woo', 'customer', $nativeId);
         }
         $order = null;
         if ($kind === 'product') {
-            if (get_post_type($nativeId) !== 'product' || !in_array(get_post_status($nativeId), ['publish','private','draft','pending','future'], true) || !wc_get_product($nativeId)) { throw new \RuntimeException('Produit indisponible.'); }
+            if (get_post_type($nativeId) !== 'product' || !in_array(get_post_status($nativeId), ['publish','private','draft','pending','future'], true) || !wc_get_product($nativeId)) { throw new \RuntimeException(\WD29\Bridge\I18n::t('Product unavailable.')); }
         } else {
             $order = wc_get_order($nativeId);
-            if (!$order || $order->get_type() !== 'shop_order' || !$this->orderSyncable($nativeId)) { throw new \RuntimeException('Commande indisponible.'); }
+            if (!$order || $order->get_type() !== 'shop_order' || !$this->orderSyncable($nativeId)) { throw new \RuntimeException(\WD29\Bridge\I18n::t('Order unavailable.')); }
         }
         $map = $this->engine->sql('SELECT record_key FROM {b}map WHERE kind=? AND local_id=? LIMIT 1', [$kind, $nativeId])[0] ?? null;
         $key = $map ? (string) $map['record_key'] : Protocol::key('woo', $kind, $nativeId);
-        if (!preg_match('/^(woo|ps):' . $kind . ':[1-9][0-9]{0,14}$/D', $key) || (strpos($key, 'woo:') === 0 && $key !== Protocol::key('woo', $kind, $nativeId))) { throw new \RuntimeException('Origine de la fiche à vérifier.'); }
+        if (!preg_match('/^(woo|ps):' . $kind . ':[1-9][0-9]{0,14}$/D', $key) || (strpos($key, 'woo:') === 0 && $key !== Protocol::key('woo', $kind, $nativeId))) { throw new \RuntimeException(\WD29\Bridge\I18n::t('Record origin needs review.')); }
         if ($order) {
             $origin = $order->get_meta('_wd29_bridge_origin');
             $snapshot = $order->get_meta('_wd29_bridge_snapshot');
-            if ($origin && (!$map || strpos($key, 'ps:') !== 0)) { throw new \RuntimeException('Correspondance de commande à vérifier.'); }
-            if (is_array($snapshot) && isset($snapshot['key']) && $snapshot['key'] !== $key) { throw new \RuntimeException('Origine de commande différente.'); }
+            if ($origin && (!$map || strpos($key, 'ps:') !== 0)) { throw new \RuntimeException(\WD29\Bridge\I18n::t('Order mapping needs review.')); }
+            if (is_array($snapshot) && isset($snapshot['key']) && $snapshot['key'] !== $key) { throw new \RuntimeException(\WD29\Bridge\I18n::t('Order origin differs.')); }
         }
         return $key;
     }
@@ -169,7 +170,7 @@ final class WooAdapter
     {
         $parts=explode(':',$key);$id=(int)$parts[2];
         if($parts[1]==='guest'){$o=wc_get_order($id);return $o && !$o->get_customer_id() && !$o->get_meta('_wd29_bridge_origin') && $this->orderSyncable($id);}
-        $u=get_userdata($id);return $u && in_array('customer',$u->roles,true) && !get_user_meta($id,'_wd29_bridge_customer_origin',true);
+        $u=get_userdata($id);return $u && OrderCustomers::source($this->engine,(int)$id)===Protocol::key('woo','customer',(int)$id) && !get_user_meta($id,'_wd29_bridge_customer_origin',true);
     }
 
     private function prices($product): array
@@ -500,6 +501,7 @@ final class WooAdapter
         } else {
             $u=get_userdata($id);
             if (!$u || !in_array('customer',$u->roles,true)) { $blank['deleted']=true; return $blank; }
+            $blank['active']=!CustomerAccounts::disabled($id);
             $blank['custom_fields']=CustomFields::exportCustomer($id);
             $c=new \WC_Customer($id); $billing=$c->get_billing(); $shipping=$c->get_shipping();
             $billing['email']=$c->get_email();
@@ -510,13 +512,15 @@ final class WooAdapter
         $blank['billing']=$billing; $blank['shipping']=$shipping; $blank['addresses']=[['id'=>'billing','label'=>'Billing']+$billing,['id'=>'shipping','label'=>'Shipping']+$shipping]; return $blank;
     }
 
+    public function disableCustomerAccount(string $key): void { CustomerAccounts::disable($this->engine,$key); }
+
     public function applyCustomerAccount(array $data): int { return CustomerAccounts::apply($this->engine,$data); }
 
     public function orderContact(int $id): ?string
     {
         $o=wc_get_order($id); if (!$o || $o->get_meta('_wd29_bridge_origin')) { return null; }
         $u=$o->get_customer_id()?get_userdata($o->get_customer_id()):false;
-        return $u && in_array('customer',$u->roles,true) ? Protocol::key('woo','customer',$u->ID) : Protocol::key('woo','guest',$id);
+        return $u ? (OrderCustomers::source($this->engine,(int)$u->ID)??Protocol::key('woo','guest',$id)) : Protocol::key('woo','guest',$id);
     }
 
     public function reconcileOrderLinks(int $id): void
@@ -534,7 +538,7 @@ final class WooAdapter
     /** Native labels for the side-by-side admin comparison; never used for sync hashes. */
     public function manualOrderSummary(int $id): array
     {
-        $order=wc_get_order($id); if (!$order) { throw new \RuntimeException('Commande introuvable.'); }
+        $order=wc_get_order($id); if (!$order) { throw new \RuntimeException(\WD29\Bridge\I18n::t('Order not found.')); }
         return ['number'=>(string)$order->get_order_number(),'status'=>$order->get_status(),'status_label'=>wc_get_order_status_name($order->get_status()),'total'=>$order->get_total(),'currency'=>$order->get_currency()];
     }
 
@@ -548,7 +552,7 @@ final class WooAdapter
     public function orderSyncable(int $id): bool
     {
         $order=wc_get_order($id);
-        return $order && !in_array($order->get_status(), ['checkout-draft','auto-draft','trash'], true);
+        return $order && !$order->get_meta('_inklura_shopify_order') && !in_array($order->get_status(), ['checkout-draft','auto-draft','trash'], true);
     }
 
     public function order(int $id): array
@@ -570,6 +574,7 @@ final class WooAdapter
         }
         return ['key' => $this->engine->identity('order', $id), 'number' => (string) $o->get_order_number(),
             'status' => $o->get_status(), 'currency' => $o->get_currency(), 'total' => $o->get_total(),
+            'customer_key'=>OrderCustomers::source($this->engine,(int)$o->get_customer_id()),
             'tax' => $o->get_total_tax(), 'shipping_net' => $o->get_shipping_total(), 'shipping_tax' => $o->get_shipping_tax(),
             'discount' => $o->get_discount_total(), 'billing' => $o->get_address('billing'), 'shipping' => $o->get_address('shipping'),
             'refunds'=>Refunds::export($o), 'custom_fields'=>CustomFields::export($o,'order'), 'items' => $items, 'created' => $o->get_date_created() ? $o->get_date_created()->date('c') : null];
@@ -581,22 +586,23 @@ final class WooAdapter
         $data=$this->order($id); $o=wc_get_order($id);
         if (strpos($data['key'],'ps:order:')!==0) { return $data; }
         $snapshot=$o->get_meta('_wd29_bridge_snapshot');
-        if (!is_array($snapshot) || $snapshot['key']!==$data['key'] || !is_array($snapshot['items']??null)) { throw new \RuntimeException('Mirror snapshot missing; explicit order review required.'); }
+        if (!empty($snapshot['customer_key']) && $o->get_customer_id() && OrderCustomers::source($this->engine,(int)$o->get_customer_id())!==$snapshot['customer_key']) { throw new NativeOrderReview('Native mirror customer identity changed; explicit review required.'); }
+        if (!is_array($snapshot) || $snapshot['key']!==$data['key'] || !is_array($snapshot['items']??null)) { throw new NativeOrderReview('Mirror snapshot missing; explicit order review required.'); }
         $decimals=wc_get_price_decimals();
-        if ($o->get_currency()!==$snapshot['currency'] || $o->get_refunds() || $o->get_transaction_id()!=='' || $o->get_payment_method()!=='') { throw new \RuntimeException('Native mirror currency/payment/refund changed; explicit order review required.'); }
+        if ($o->get_currency()!==$snapshot['currency'] || $o->get_refunds() || $o->get_transaction_id()!=='' || $o->get_payment_method()!=='') { throw new NativeOrderReview('Native mirror currency/payment/refund changed; explicit order review required.'); }
         foreach (['total'=>'get_total','tax'=>'get_total_tax','shipping_net'=>'get_shipping_total','shipping_tax'=>'get_shipping_tax','discount'=>'get_discount_total'] as $field=>$getter) { OrderConflicts::assertMoney($o->$getter(),$snapshot[$field]??null,$decimals); }
         OrderConflicts::assertAddress($o->get_address('billing'),$snapshot['billing']);
         $expectedShipping=$snapshot['shipping']; unset($expectedShipping['email']); // Woo shipping addresses have no native email field.
         OrderConflicts::assertAddress($o->get_address('shipping'),$expectedShipping);
         $items=array_values($o->get_items());
-        if (count($items)!==count($snapshot['items'])) { throw new \RuntimeException('Native mirror line count changed; explicit order review required.'); }
+        if (count($items)!==count($snapshot['items'])) { throw new NativeOrderReview('Native mirror line count changed; explicit order review required.'); }
         foreach ($snapshot['items'] as $index=>$line) {
             $item=$items[$index]; $expectedKey=isset($line['line_id'])?'source:'.$line['line_id']:'legacy:'.$index;
             $storedKey=(string)$item->get_meta('_wd29_source_line');
-            if (($storedKey!=='' && $storedKey!==$expectedKey) || $item->get_name()!==$line['name'] || (int)$item->get_quantity()!==(int)$line['quantity']) { throw new \RuntimeException('Native mirror line identity or quantity changed; explicit order review required.'); }
+            if (($storedKey!=='' && $storedKey!==$expectedKey) || $item->get_name()!==$line['name'] || (int)$item->get_quantity()!==(int)$line['quantity']) { throw new NativeOrderReview('Native mirror line identity or quantity changed; explicit order review required.'); }
             $actualProduct=(int)($item->get_variation_id()?:$item->get_product_id());
             $productMap=!empty($line['product'])?$this->engine->mapping($line['product']):null;
-            if (($line['product']!==null && (!$productMap || $actualProduct!==(int)$productMap['local_id'])) || ($line['product']===null && $actualProduct!==0)) { throw new \RuntimeException('Native mirror product link changed; explicit order review required.'); }
+            if (($line['product']!==null && (!$productMap || $actualProduct!==(int)$productMap['local_id'])) || ($line['product']===null && $actualProduct!==0)) { throw new NativeOrderReview('Native mirror product link changed; explicit order review required.'); }
             OrderConflicts::assertMoney($item->get_total(),$line['net'],$decimals);
             OrderConflicts::assertMoney($item->get_total_tax(),$line['tax'],$decimals);
             OrderConflicts::assertMoney($item->get_subtotal(),$line['net'],$decimals);
@@ -608,10 +614,10 @@ final class WooAdapter
         $discountNet=$lineNet-((float)$snapshot['total']-(float)$snapshot['tax']);
         $discountTax=$lineTax-(float)$snapshot['tax']; $fees=array_values($o->get_items('fee'));
         $expectedFee=abs($lineNet+$lineTax-(float)$snapshot['total'])>0.02;
-        if (count($fees)!==($expectedFee?1:0) || $o->get_items('coupon')) { throw new \RuntimeException('Native mirror fees/coupons changed; explicit order review required.'); }
+        if (count($fees)!==($expectedFee?1:0) || $o->get_items('coupon')) { throw new NativeOrderReview('Native mirror fees/coupons changed; explicit order review required.'); }
         if ($expectedFee) { OrderConflicts::assertMoney($fees[0]->get_total(),-$discountNet,$decimals); OrderConflicts::assertMoney($fees[0]->get_total_tax(),-$discountTax,$decimals); }
         $shipping=array_values($o->get_items('shipping'));
-        if (count($shipping)!==1) { throw new \RuntimeException('Native mirror shipping lines changed; explicit order review required.'); }
+        if (count($shipping)!==1) { throw new NativeOrderReview('Native mirror shipping lines changed; explicit order review required.'); }
         OrderConflicts::assertMoney($shipping[0]->get_total(),$snapshot['shipping_net'],$decimals);
         OrderConflicts::assertMoney($shipping[0]->get_total_tax(),$snapshot['shipping_tax'],$decimals);
         return $data;
@@ -682,13 +688,19 @@ final class WooAdapter
             $o->save();
             return $o->get_id();
         }
+        if ($map) { $this->orderConflictSnapshot((int)$map['local_id']); }
         $o = $map ? wc_get_order((int) $map['local_id']) : new \WC_Order();
         if (!$o) { throw new \RuntimeException('Mapped order no longer exists.'); }
         if (!$map) {
             // A mirror is a record of a sale, never a second payment or second stock movement.
             $o->set_created_via('wd29_bridge');
-            $o->set_customer_id(0);
+            $o->set_customer_id(OrderCustomers::resolve($this->engine,$data['customer_key']??null));
             $o->update_meta_data('_wd29_bridge_origin', 'ps');
+        }
+        $registered=OrderCustomers::resolve($this->engine,$data['customer_key']??null);
+        if ($registered && (int)$o->get_customer_id()!==$registered) {
+            if ($o->get_customer_id()) { throw new \RuntimeException('Native order customer changed; identity review required.'); }
+            $o->set_customer_id($registered);
         }
         if (isset($data['refunds'])) { Refunds::apply($o,$data); }
         $o->update_meta_data('_wd29_bridge_snapshot', $data);

@@ -12,15 +12,15 @@
     var pending = false;
     var started = false;
     var messages = {
-      unmapped: 'Ce produit n’a pas encore de correspondance synchronisée.',
-      disconnected: 'Aucune boutique PrestaShop connectée.',
-      unpublished: 'Produit distant non publié : aucune fiche publique disponible sur PrestaShop.',
-      missing: 'Aucune fiche publique correspondante sur PrestaShop. Le produit peut être absent ou non publié.',
-      unavailable: 'La boutique partenaire ne peut pas être vérifiée pour le moment. Réessayez.'
+      unmapped: window.InkluraSyncI18n.t('This product has no synchronized mapping yet.'),
+      disconnected: window.InkluraSyncI18n.t('No PrestaShop store connected.'),
+      unpublished: window.InkluraSyncI18n.t('Remote product not published: no public product page available on PrestaShop.'),
+      missing: window.InkluraSyncI18n.t('No matching public product page on PrestaShop. The product may be missing or unpublished.'),
+      unavailable: window.InkluraSyncI18n.t('The partner store cannot be checked right now. Try again.')
     };
     function unavailable(message) {
       status.textContent = message || messages.unavailable;
-      retry.textContent = 'Réessayer';
+      retry.textContent = window.InkluraSyncI18n.t('Retry');
       show(retry, true);
     }
     async function lookup() {
@@ -31,7 +31,7 @@
       show(link, false);
       link.removeAttribute('href');
       box.setAttribute('aria-busy', 'true');
-      status.textContent = 'Vérification de la fiche PrestaShop…';
+      status.textContent = window.InkluraSyncI18n.t('Checking the PrestaShop product page…');
       var controller = new AbortController();
       var timer = setTimeout(function () { controller.abort(); }, 12000);
       try {
@@ -42,7 +42,7 @@
         });
         var payload = await response.json();
         if (!response.ok || !payload || payload.ok !== true || !payload.data) {
-          unavailable(response.status === 403 ? 'Session expirée ou accès refusé. Actualisez la page.' : 'Impossible de vérifier le lien. Réessayez.');
+          unavailable(response.status === 403 ? window.InkluraSyncI18n.t('Session expired or access denied. Refresh the page.') : window.InkluraSyncI18n.t('Unable to check the link. Try again.'));
           return;
         }
         var data = payload.data;
@@ -52,11 +52,11 @@
           link.href = url.href;
           show(link, true);
           if (host) host.textContent = String(data.peer_host);
-          status.textContent = 'Fiche publique correspondante trouvée sur PrestaShop.';
+          status.textContent = window.InkluraSyncI18n.t('Matching public product page found on PrestaShop.');
           show(retry, false);
         } else {
           status.textContent = messages[data.state] || messages.unavailable;
-          retry.textContent = 'Vérifier à nouveau';
+          retry.textContent = window.InkluraSyncI18n.t('Check again');
           show(retry, true);
         }
       } catch (_) { unavailable(); }

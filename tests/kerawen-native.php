@@ -57,3 +57,23 @@ wc_update_product_stock($mirror,2,'decrease');$e->capture('product',$mirrorId);
 $stock=$e->sql("SELECT payload FROM {b}queue WHERE direction='out' AND kind='stock' AND record_key=?",[$foreign['key']]);
 check(count($stock)===1&&json_decode($stock[0]['payload'],true)['delta']===-2,'Native decimal stock capture lost or duplicated a movement');
 echo "PASS: signed native receipt, same-ID simultaneous creation, empty SKUs, tax-disabled/missing-rate recovery, independent queue progress, net/gross price preservation, replay, native stock delta\n";
+
+// A delayed partner update wins after the worker has already captured a local
+// snapshot. That losing snapshot must never be delivered after the import.
+$config=$e->config();$config['conflict_policy']='ps';$e->adapter->saveConfig($config);
+$e->capture('product',$id);
+$stale=$e->sql("SELECT seq FROM {b}queue WHERE direction='out' AND kind='product' AND record_key=? AND state='pending'",[$localKey]);
+check((bool)$stale,'Native stale-export regression has no pending snapshot');
+$incoming=$e->adapter->product($id);$incoming['prices']=['basis'=>'net','regular'=>'5.500000','sale'=>null,'tax_rate'=>20];
+$eventId=bin2hex(random_bytes(16));$e->enqueue('in','product',$localKey,['base'=>'','hash'=>Engine::catalogHash($incoming),'data'=>$incoming],$eventId);
+$event=$e->sql("SELECT * FROM {b}queue WHERE direction='in' AND event_id=?",[$eventId])[0];
+$stockBefore=wc_get_product($id)->get_stock_quantity();
+$apply->invoke($e,$event);
+check($e->sql('SELECT state FROM {b}queue WHERE seq=?',[$event['seq']])[0]['state']==='applied','Winning native import was not applied');
+foreach($stale as $outgoing)check($e->sql('SELECT state FROM {b}queue WHERE seq=?',[$outgoing['seq']])[0]['state']==='ignored','Stale native export survived accepted import');
+check(abs((float)wc_get_product($id)->get_regular_price()-6.6)<0.000001,'Native repair did not preserve 5.50 EUR HT / 6.60 EUR TTC');
+check(wc_get_product($id)->get_stock_quantity()===$stockBefore,'Catalogue winner changed stock');
+$e->capture('product',$id);$apply->invoke($e,$event);
+check(!$e->sql("SELECT seq FROM {b}queue WHERE direction='out' AND kind='product' AND record_key=? AND state='pending'",[$localKey]),'Capture or replay re-exported the superseded price');
+check(abs((float)$e->adapter->product($id)['prices']['regular']-5.5)<0.000001,'Native winning price drifted on recapture/replay');
+echo "PASS: native delayed import retires stale exports, preserves HT/TTC and stock, and remains stable on capture/replay\n";

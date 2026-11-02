@@ -2,6 +2,18 @@
 namespace WD29\Bridge;
 final class CustomerAccounts
 {
+    public static function disabled(int $id): bool
+    {
+        return (bool)preg_match('/^ps:customer:[1-9][0-9]*$/D',(string)get_user_meta($id,'_wd29_bridge_customer_origin',true)) && (bool)get_user_meta($id,'_wd29_bridge_customer_disabled',true);
+    }
+    public static function disable(Engine $engine,string $key): void
+    {
+        $rows=$engine->sql('SELECT native_id FROM {b}account_links WHERE record_key=? LIMIT 2',[$key]);
+        if (!$rows) { return; }
+        $id=(int)$rows[0]['native_id'];$user=get_userdata($id);
+        if (count($rows)!==1 || !$user || array_values((array)$user->roles)!==['customer'] || get_user_meta($id,'_wd29_bridge_customer_origin',true)!==$key) { throw new \RuntimeException('Native customer identity changed; account status review required.'); }
+        update_user_meta($id,'_wd29_bridge_customer_disabled','1');
+    }
     public static function apply(Engine $engine,array $data): int
     {
         $suppress=static function() { return true; };
@@ -29,6 +41,7 @@ final class CustomerAccounts
         }
         $customer->set_billing_email($email);
         $customer->update_meta_data('_wd29_bridge_customer_origin',$data['key']);
+        if (array_key_exists('active',$data)) { $customer->update_meta_data('_wd29_bridge_customer_disabled',$data['active']?'':'1'); }
         $customer->save();
         if (isset($data['custom_fields'])) { CustomFields::apply($customer,$data['custom_fields'],'customer'); $customer->save(); }
         $engine->sql('INSERT INTO {b}account_links (record_key,native_id) VALUES (?,?) ON DUPLICATE KEY UPDATE native_id=VALUES(native_id)',[$data['key'],$customer->get_id()]);

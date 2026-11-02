@@ -47,7 +47,7 @@ function wc_get_product($id){return $id>0?(object)['id'=>$id]:false;}
 function get_post($id){return (object)['ID'=>$id];}
 function get_userdata($id){global $roles;return $id>0?(object)['ID'=>$id,'roles'=>$roles]:false;}
 function get_user_meta($id,$key,$single){global $customerOrigin;return $customerOrigin;}
-function wc_get_order($id){return new class($id){private $id;function __construct($id){$this->id=$id;}function get_type(){global $orderType;return $orderType;}function get_status(){global $status;return $status;}function get_meta($key){global $orderOrigin,$orderSnapshot;return $key==='_wd29_bridge_origin'?$orderOrigin:$orderSnapshot;}function get_id(){return $this->id;}function get_edit_order_url(){return 'https://woo.example/wp-admin/admin.php?page=wc-orders&action=edit&id='.$this->id;}};}
+function wc_get_order($id){return new class($id){private $id;function __construct($id){$this->id=$id;}function get_type(){global $orderType;return $orderType;}function get_status(){global $status;return $status;}function get_meta($key){global $orderOrigin,$orderSnapshot;return $key==='_wd29_bridge_origin'?$orderOrigin:($key==='_wd29_bridge_snapshot'?$orderSnapshot:'');}function get_id(){return $this->id;}function get_edit_order_url(){return 'https://woo.example/wp-admin/admin.php?page=wc-orders&action=edit&id='.$this->id;}};}
 function add_action($name,$cb,...$args){global $hooks;$hooks[$name]=$cb;}
 function add_meta_box($id,$title,$callback,$screen,...$args){global $boxes;$boxes[$screen]=$id;}
 function wc_get_page_screen_id($name){return 'woocommerce_page_wc-orders';}
